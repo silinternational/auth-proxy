@@ -1,0 +1,18 @@
+{
+	order dynamic_proxy first
+}
+
+:8888 {
+	encode zstd gzip
+
+	respond /test 200 {
+		body {vars.upstream}
+		close
+	}
+
+	dynamic_proxy {
+		management_api http://localhost:53050
+	}
+
+	reverse_proxy * {vars.upstream}
+}

@@ -1,0 +1,47 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+caddy
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Local env files
+*.env
+!test.env
+!*example.env
+
+# Other files
+**/*.log
+**/.DS_Store
+*-packr.go
+*.aes
+*.pid
+.console_history
+.grifter/
+.idea/
+.jhw-cache/
+.vendor/
+.vscode/
+application/grifts/private.go
+application/swagger.json
+application/vendor/
+bin/
+coverage
+coverage.data
+generated/
+jhw.*
+tmp/
+go-build/
+
+application/node_modules/
+application/public/assets/
+application/.routify
+
+docker-compose.override.yml
