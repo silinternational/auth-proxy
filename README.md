@@ -10,4 +10,4 @@ it running is:
    another team member via Signal or other secure communication tool.
 2. Run `make`
 
-At this point you'll have a running instance of this application available at http://localhost.
+At this point you'll have a running instance of this application available at http://localhost:8888.
