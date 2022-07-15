@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -54,7 +55,17 @@ func (Proxy) CaddyModule() caddy.ModuleInfo {
 func (p *Proxy) Provision(ctx caddy.Context) error {
 	p.log = ctx.Logger(p)
 
-	return envconfig.Process("auth", &p.auth)
+	if err := envconfig.Process("auth", &p.auth); err != nil {
+		return err
+	}
+
+	secret, err := base64.StdEncoding.DecodeString(p.auth.TokenSecret)
+	if err != nil {
+		return fmt.Errorf("unable to decode ProxyTokenSecret: %w", err)
+	}
+
+	p.auth.TokenSecret = string(secret)
+	return nil
 }
 
 // Validate implements caddy.Validator.
@@ -104,22 +115,11 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	// check cookie, if none exist with name
+	// Redirect to management API if no cookie or it's expired
 	cookie, err := r.Cookie(p.auth.CookieName)
-	if err != nil {
-		return err
-	}
-
-	// if cookie expired return error
-	// p.log.Info(cookie.Expires.String())
-	// p.log.Info(time.Now().String())
-	// if time.Now().After(cookie.Expires) {
-	// 	return fmt.Errorf("jwt expired")
-	// }
-
-	secret, err := base64.StdEncoding.DecodeString(p.auth.TokenSecret)
-	if err != nil {
-		return fmt.Errorf("unable to decode ProxyTokenSecret: %w", err)
+	if err != nil || cookie.Expires.Before(time.Now()) {
+		p.setVar(r, "upstream", p.ManagementAPI)
+		return nil
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -127,7 +127,7 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return secret, nil
+		return []byte(p.auth.TokenSecret), nil
 	})
 	if err != nil {
 		return err
@@ -138,10 +138,13 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
 
-	caddyhttp.SetVar(r.Context(), "upstream", url)
-	p.log.Info("setting upstream to " + url)
-
+	p.setVar(r, "upstream", url)
 	return next.ServeHTTP(w, r)
+}
+
+func (p Proxy) setVar(r *http.Request, name, value string) {
+	caddyhttp.SetVar(r.Context(), name, value)
+	p.log.Info("setting " + name + " to " + value)
 }
 
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
