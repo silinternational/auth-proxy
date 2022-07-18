@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -115,9 +114,10 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	// Redirect to management API if no cookie or it's expired
+	// Redirect to management API to set new cookie
+	// if no cookie or cookie is expired
 	cookie, err := r.Cookie(p.auth.CookieName)
-	if err != nil || cookie.Expires.Before(time.Now()) {
+	if err != nil {
 		p.setVar(r, "upstream", p.ManagementAPI)
 		return nil
 	}
