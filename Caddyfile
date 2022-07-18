@@ -11,7 +11,7 @@
 	}
 
 	dynamic_proxy {
-		management_api http://localhost:53050
+		management_api {$MANAGEMENT_API}
 	}
 
 	reverse_proxy * {vars.upstream}
