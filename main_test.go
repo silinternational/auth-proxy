@@ -77,10 +77,10 @@ func Test_AuthProxy(t *testing.T) {
 
 			to, err := proxy.authRedirect(r)
 			if tc.wantErr {
-				assert.NotNil(err)
+				assert.Error(err)
 				assert.Contains(err.Error(), tc.want)
 			} else {
-				assert.Nil(err)
+				assert.NoError(err)
 				assert.Equal(tc.want, to)
 			}
 		})
