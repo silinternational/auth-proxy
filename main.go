@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -27,18 +28,22 @@ func init() {
 	httpcaddyfile.RegisterHandlerDirective("dynamic_proxy", parseCaddyfile)
 }
 
+type ProxyAuth struct {
+	CookieName  string            `required:"true" split_words:"true"`
+	TokenSecret string            `required:"true" split_words:"true"`
+	URLs        map[string]string `required:"true"`
+}
+
+type ProxyClaim struct {
+	Level string `json:"level"`
+	jwt.StandardClaims
+}
+
 type Proxy struct {
 	ManagementAPI string `json:"management_api,omitempty"`
 
-	auth struct {
-		CookieName  string            `required:"true" split_words:"true"`
-		TokenSecret string            `required:"true" split_words:"true"`
-		URLs        map[string]string `required:"true"`
-	}
-	claim struct {
-		Level string `json:"level"`
-		jwt.StandardClaims
-	}
+	auth  ProxyAuth
+	claim ProxyClaim
 
 	log *zap.Logger
 }
@@ -114,12 +119,18 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	// Redirect to management API to set new cookie
-	// if no cookie or cookie is expired
+	if err := p.authRedirect(r); err != nil {
+		return err
+	}
+
+	return next.ServeHTTP(w, r)
+}
+
+func (p Proxy) authRedirect(r *http.Request) error {
+	// if no cookie, redirect to get new cookie
 	cookie, err := r.Cookie(p.auth.CookieName)
 	if err != nil {
-		p.setVar(r, "upstream", p.ManagementAPI)
-		return nil
+		return p.setVar(r, "upstream", p.ManagementAPI)
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -133,18 +144,23 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return err
 	}
 
+	// if cookie expired at is past, redirect to get new cookie
+	if p.claim.ExpiresAt < time.Now().Unix() {
+		return p.setVar(r, "upstream", p.ManagementAPI)
+	}
+
 	url, ok := p.auth.URLs[p.claim.Level]
 	if !ok {
 		return fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
 
-	p.setVar(r, "upstream", url)
-	return next.ServeHTTP(w, r)
+	return p.setVar(r, "upstream", url)
 }
 
-func (p Proxy) setVar(r *http.Request, name, value string) {
+func (p Proxy) setVar(r *http.Request, name, value string) error {
 	caddyhttp.SetVar(r.Context(), name, value)
 	p.log.Info("setting " + name + " to " + value)
+	return nil
 }
 
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
