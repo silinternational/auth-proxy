@@ -1,21 +1,56 @@
 version: "3.7"
 
 services:
-  caddy:
+  app:
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: Dockerfile
     ports:
-        - "8888:8888"
-        - "443:443"
-        - "2019:2019"
-    env_file: ./local.env
+      - "8888:8888"
+      - "443:443"
+      - "2019:2019"
+    env_file: local.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - ./site:/srv
       - caddy_data:/data
       - caddy_config:/config
     command: xcaddy run
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile-test
+    env_file: local.env
+
+  fakemanagementapi:
+    image: lipanski/docker-static-website:latest
+    ports:
+      - "8900:80"
+    volumes:
+      - ./site:/home/static
+    command: ["/thttpd", "-D", "-h", "0.0.0.0", "-p", "80", "-d", "/home/static", "-u", "static", "-l", "-", "-M", "60"]
+  server1:
+    image: lipanski/docker-static-website:latest
+    ports:
+      - "8901:80"
+    volumes:
+      - ./site:/home/static
+    command: ["/thttpd", "-D", "-h", "0.0.0.0", "-p", "80", "-d", "/home/static", "-u", "static", "-l", "-", "-M", "60"]
+  server2:
+    image: lipanski/docker-static-website:latest
+    ports:
+      - "8902:80"
+    volumes:
+      - ./site:/home/static
+    command: ["/thttpd", "-D", "-h", "0.0.0.0", "-p", "80", "-d", "/home/static", "-u", "static", "-l", "-", "-M", "60"]
+  server3:
+    image: lipanski/docker-static-website:latest
+    ports:
+      - "8903:80"
+    volumes:
+      - ./site:/home/static
+    command: ["/thttpd", "-D", "-h", "0.0.0.0", "-p", "80", "-d", "/home/static", "-u", "static", "-l", "-", "-M", "60"]
 
 volumes:
   caddy_data:
