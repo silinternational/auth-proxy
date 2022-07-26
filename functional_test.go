@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -26,13 +27,27 @@ var (
 	client = http.DefaultClient
 )
 
-const testURL = "http://app:8888"
+const testURL = "http://testapp:8888"
 
-func TestMain(m *testing.M) {
+func Test_Functional(t *testing.T) {
 	// setup
 	envconfig.Process("auth", &auth)
 	secret, _ := base64.StdEncoding.DecodeString(auth.TokenSecret)
 	auth.TokenSecret = string(secret)
+
+	for i, u := range auth.URLs {
+		u, err := url.QueryUnescape(u)
+		assert.NoError(t, err)
+
+		parsed, err := url.Parse("http://" + u)
+		assert.NoError(t, err)
+
+		if parsed.Port() == "" {
+			u = parsed.Host + ":80" + parsed.Path
+		}
+
+		auth.URLs[i] = u
+	}
 
 	// run function tests
 	status := godog.TestSuite{
@@ -40,7 +55,7 @@ func TestMain(m *testing.M) {
 		ScenarioInitializer: InitializeScenario,
 	}.Run()
 
-	os.Exit(status)
+	assert.Equal(t, 0, status)
 }
 
 func sendRequest(url string, c *http.Cookie) error {
@@ -90,7 +105,7 @@ func weSendARequestWithAuthorizationData(t string) error {
 
 func weWillBeRedirectedToTheManagementApi() error {
 	proxy := last
-	if err := sendRequest(os.Getenv("MANAGEMENT_API"), nil); err != nil {
+	if err := sendRequest("http://"+os.Getenv("MANAGEMENT_API"), nil); err != nil {
 		return err
 	}
 
@@ -102,12 +117,13 @@ func weDoNotSeeAnErrorMessage() error {
 }
 
 func weWillSeeAnErrorMessage() error {
+	fmt.Println(last.response)
 	return assertExpectedAndActual(assert.Equal, 500, last.response.StatusCode)
 }
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest(auth.URLs[level], nil); err != nil {
+	if err := sendRequest("http://"+auth.URLs[level], nil); err != nil {
 		return err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -61,6 +62,24 @@ func (p *Proxy) Provision(ctx caddy.Context) error {
 
 	if err := envconfig.Process("auth", &p.auth); err != nil {
 		return err
+	}
+
+	for i, u := range p.auth.URLs {
+		u, err := url.QueryUnescape(u)
+		if err != nil {
+			return err
+		}
+
+		parsed, err := url.Parse("http://" + u)
+		if err != nil {
+			return err
+		}
+
+		if parsed.Port() == "" {
+			u = parsed.Host + ":80" + parsed.Path
+		}
+
+		p.auth.URLs[i] = u
 	}
 
 	secret, err := base64.StdEncoding.DecodeString(p.auth.TokenSecret)
@@ -149,12 +168,12 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 		return "", err
 	}
 
-	url, ok := p.auth.URLs[p.claim.Level]
+	result, ok := p.auth.URLs[p.claim.Level]
 	if !ok {
 		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
 
-	return url, nil
+	return result, nil
 }
 
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
