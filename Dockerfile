@@ -1,4 +1,7 @@
 FROM caddy:builder
 COPY . .
-RUN source local.env
-CMD xcaddy run
+ARG ENVFILE="local.env"
+RUN source ${ENVFILE}
+ARG XCADDY_SKIP_CLEANUP=1
+RUN xcaddy
+CMD caddy

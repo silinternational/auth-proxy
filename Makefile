@@ -1,10 +1,12 @@
-app:
-	docker-compose up -d caddy
+dev:
+	docker-compose up -d app
 
-test: test-unit test-functional
+test:
+	docker-compose up -d testapp fakemanagementapi server1 server2 server3
+	docker-compose run --rm test go test
 
-test-unit:
-	go test
+clean:
+	docker-compose kill
+	docker-compose rm -f
 
-test-functional:
-	echo "not implemented"
+fresh: clean dev
