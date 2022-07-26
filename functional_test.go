@@ -117,7 +117,6 @@ func weDoNotSeeAnErrorMessage() error {
 }
 
 func weWillSeeAnErrorMessage() error {
-	fmt.Println(last.response)
 	return assertExpectedAndActual(assert.Equal, 500, last.response.StatusCode)
 }
 
