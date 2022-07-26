@@ -1,17 +1,14 @@
 package proxy
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/cucumber/godog"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,23 +28,9 @@ const testURL = "http://testapp:8888"
 
 func Test_Functional(t *testing.T) {
 	// setup
-	envconfig.Process("auth", &auth)
-	secret, _ := base64.StdEncoding.DecodeString(auth.TokenSecret)
-	auth.TokenSecret = string(secret)
-
-	for i, u := range auth.URLs {
-		u, err := url.QueryUnescape(u)
-		assert.NoError(t, err)
-
-		parsed, err := url.Parse("http://" + u)
-		assert.NoError(t, err)
-
-		if parsed.Port() == "" {
-			u = parsed.Host + ":80" + parsed.Path
-		}
-
-		auth.URLs[i] = u
-	}
+	var err error
+	auth, err = newProxyAuth()
+	assert.NoError(t, err)
 
 	// run function tests
 	status := godog.TestSuite{

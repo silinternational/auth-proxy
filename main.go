@@ -58,36 +58,12 @@ func (Proxy) CaddyModule() caddy.ModuleInfo {
 
 // Provision implements caddy.Provisioner.
 func (p *Proxy) Provision(ctx caddy.Context) error {
+	var err error
 	p.log = ctx.Logger(p)
-
-	if err := envconfig.Process("auth", &p.auth); err != nil {
+	if p.auth, err = newProxyAuth(); err != nil {
 		return err
 	}
 
-	for i, u := range p.auth.URLs {
-		u, err := url.QueryUnescape(u)
-		if err != nil {
-			return err
-		}
-
-		parsed, err := url.Parse("http://" + u)
-		if err != nil {
-			return err
-		}
-
-		if parsed.Port() == "" {
-			u = parsed.Host + ":80" + parsed.Path
-		}
-
-		p.auth.URLs[i] = u
-	}
-
-	secret, err := base64.StdEncoding.DecodeString(p.auth.TokenSecret)
-	if err != nil {
-		return fmt.Errorf("unable to decode ProxyTokenSecret: %w", err)
-	}
-
-	p.auth.TokenSecret = string(secret)
 	return nil
 }
 
@@ -180,4 +156,37 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 	var p Proxy
 	err := p.UnmarshalCaddyfile(h.Dispenser)
 	return p, err
+}
+
+func newProxyAuth() (ProxyAuth, error) {
+	var auth ProxyAuth
+	if err := envconfig.Process("auth", &auth); err != nil {
+		return auth, err
+	}
+
+	for i, u := range auth.URLs {
+		u, err := url.QueryUnescape(u)
+		if err != nil {
+			return auth, err
+		}
+
+		parsed, err := url.Parse("http://" + u)
+		if err != nil {
+			return auth, err
+		}
+
+		if parsed.Port() == "" {
+			u = parsed.Host + ":80" + parsed.Path
+		}
+
+		auth.URLs[i] = u
+	}
+
+	secret, err := base64.StdEncoding.DecodeString(auth.TokenSecret)
+	if err != nil {
+		return auth, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
+	}
+
+	auth.TokenSecret = string(secret)
+	return auth, nil
 }
