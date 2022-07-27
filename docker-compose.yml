@@ -20,8 +20,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - ENVFILE=test.env
     ports:
       - "8999:8888"
       - "443:443"
