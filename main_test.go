@@ -61,11 +61,11 @@ func Test_AuthProxy(t *testing.T) {
 	proxy := Proxy{
 		ManagementAPI: managementAPI,
 		auth: ProxyAuth{
-			cookieName,
-			tokenSecret,
-			authURLs,
+			CookieName:  cookieName,
+			TokenSecret: tokenSecret,
 		},
-		log: zap.L(),
+		sites: authURLs,
+		log:   zap.L(),
 	}
 
 	for _, tc := range tests {

@@ -22,4 +22,4 @@ Feature: functional test cases
 			| accessLevel |
 			| one         |
 			| two         |
-			| ten         |
+			| three       |

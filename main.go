@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -30,9 +29,14 @@ func init() {
 }
 
 type ProxyAuth struct {
-	CookieName  string            `required:"true" split_words:"true"`
-	TokenSecret string            `required:"true" split_words:"true"`
-	URLs        map[string]string `required:"true"`
+	CookieName     string `required:"true" split_words:"true"`
+	TokenSecret    string `required:"true" split_words:"true"`
+	SiteOne        string `required:"true" split_words:"true"`
+	SiteOneLevel   string `required:"true" split_words:"true"`
+	SiteTwo        string `required:"true" split_words:"true"`
+	SiteTwoLevel   string `required:"true" split_words:"true"`
+	SiteThree      string `required:"true" split_words:"true"`
+	SiteThreeLevel string `required:"true" split_words:"true"`
 }
 
 type ProxyClaim struct {
@@ -45,6 +49,7 @@ type Proxy struct {
 
 	auth  ProxyAuth
 	claim ProxyClaim
+	sites map[string]string
 
 	log *zap.Logger
 }
@@ -58,11 +63,22 @@ func (Proxy) CaddyModule() caddy.ModuleInfo {
 
 // Provision implements caddy.Provisioner.
 func (p *Proxy) Provision(ctx caddy.Context) error {
-	var err error
 	p.log = ctx.Logger(p)
-	if p.auth, err = newProxyAuth(); err != nil {
+
+	if err := envconfig.Process("auth", &p.auth); err != nil {
 		return err
 	}
+
+	secret, err := base64.StdEncoding.DecodeString(p.auth.TokenSecret)
+	if err != nil {
+		return fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
+	}
+	p.auth.TokenSecret = string(secret)
+
+	p.sites = make(map[string]string)
+	p.sites[p.auth.SiteOneLevel] = p.auth.SiteOne
+	p.sites[p.auth.SiteTwoLevel] = p.auth.SiteTwo
+	p.sites[p.auth.SiteThreeLevel] = p.auth.SiteThree
 
 	return nil
 }
@@ -81,7 +97,7 @@ func (p Proxy) Validate() error {
 		return fmt.Errorf("missing `AUTH_TOKEN_SECRET`")
 	}
 
-	if len(p.auth.URLs) == 0 {
+	if len(p.sites) == 0 {
 		return fmt.Errorf("missing `AUTH_URLS`")
 	}
 
@@ -144,7 +160,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 		return "", err
 	}
 
-	result, ok := p.auth.URLs[p.claim.Level]
+	result, ok := p.sites[p.claim.Level]
 	if !ok {
 		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
@@ -156,37 +172,4 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 	var p Proxy
 	err := p.UnmarshalCaddyfile(h.Dispenser)
 	return p, err
-}
-
-func newProxyAuth() (ProxyAuth, error) {
-	var auth ProxyAuth
-	if err := envconfig.Process("auth", &auth); err != nil {
-		return auth, err
-	}
-
-	for i, u := range auth.URLs {
-		u, err := url.QueryUnescape(u)
-		if err != nil {
-			return auth, err
-		}
-
-		parsed, err := url.Parse("http://" + u)
-		if err != nil {
-			return auth, err
-		}
-
-		if parsed.Port() == "" {
-			u = parsed.Host + ":80" + parsed.Path
-		}
-
-		auth.URLs[i] = u
-	}
-
-	secret, err := base64.StdEncoding.DecodeString(auth.TokenSecret)
-	if err != nil {
-		return auth, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
-	}
-
-	auth.TokenSecret = string(secret)
-	return auth, nil
 }

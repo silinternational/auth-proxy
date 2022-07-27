@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cucumber/godog"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,8 +20,9 @@ type testResponse struct {
 }
 
 var (
-	auth ProxyAuth
-	last testResponse
+	auth  ProxyAuth
+	last  testResponse
+	sites map[string]string
 
 	client = http.DefaultClient
 )
@@ -28,9 +31,17 @@ const testURL = "http://testapp:8888"
 
 func Test_Functional(t *testing.T) {
 	// setup
-	var err error
-	auth, err = newProxyAuth()
+	err := envconfig.Process("auth", &auth)
 	assert.NoError(t, err)
+
+	secret, err := base64.StdEncoding.DecodeString(auth.TokenSecret)
+	assert.NoError(t, err)
+	auth.TokenSecret = string(secret)
+
+	sites = make(map[string]string)
+	sites[auth.SiteOneLevel] = auth.SiteOne
+	sites[auth.SiteTwoLevel] = auth.SiteTwo
+	sites[auth.SiteThreeLevel] = auth.SiteThree
 
 	// run function tests
 	status := godog.TestSuite{
@@ -105,7 +116,7 @@ func weWillSeeAnErrorMessage() error {
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest("http://"+auth.URLs[level], nil); err != nil {
+	if err := sendRequest("http://"+sites[level], nil); err != nil {
 		return err
 	}
 
