@@ -38,29 +38,51 @@ services:
     env_file: test.env
 
   fakemanagementapi:
-    image: lipanski/docker-static-website:latest
+    image: caddy:latest
     ports:
-      - "8900:3000"
+      - "8900:80"
+    environment:
+      - RESPONSE=API
     volumes:
-      - ./site:/home/static
+      - ./Caddyfile-test:/srv/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    command: caddy run
   server1:
-    image: lipanski/docker-static-website:latest
+    image: caddy:latest
     ports:
-      - "8901:3000"
+      - "8901:80"
+      - "8911:443"
+      - "8921:2019"
+    environment:
+      - RESPONSE=1
     volumes:
-      - ./site/1.txt:/home/static/1.txt
+      - ./Caddyfile-test:/srv/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    command: caddy run
   server2:
-    image: lipanski/docker-static-website:latest
+    image: caddy:latest
     ports:
-      - "8902:3000"
+      - "8902:80"
+    environment:
+      - RESPONSE=2
     volumes:
-      - ./site/2.txt:/home/static/2.txt
+      - ./Caddyfile-test:/srv/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    command: caddy run
   server3:
-    image: lipanski/docker-static-website:latest
+    image: caddy:latest
     ports:
-      - "8903:3000"
+      - "8903:80"
+    environment:
+      - RESPONSE=3
     volumes:
-      - ./site/3.txt:/home/static/3.txt
+      - ./Caddyfile-test:/srv/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    command: caddy run
 
 volumes:
   caddy_data:
