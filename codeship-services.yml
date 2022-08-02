@@ -1,0 +1,51 @@
+testapp:
+  build:
+    context: .
+    dockerfile: Dockerfile
+    expose:
+      - "8888"
+  env_file: test.env
+  volumes:
+    - ./Caddyfile:/etc/caddy/Caddyfile
+  command: caddy run
+
+test:
+  build:
+    context: .
+    dockerfile: Dockerfile-test
+  env_file: test.env
+  depends_on:
+    - testapp
+    - fakemanagementapi
+    - server1
+    - server2
+    - server3
+
+fakemanagementapi:
+  image: caddy:latest
+  environment:
+    RESPONSE: API
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run
+server1:
+  image: caddy:latest
+  environment:
+    RESPONSE: 1
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run
+server2:
+  image: caddy:latest
+  environment:
+    RESPONSE: 2
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run
+server3:
+  image: caddy:latest
+  environment:
+    RESPONSE: 3
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run

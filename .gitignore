@@ -29,19 +29,10 @@ caddy
 .jhw-cache/
 .vendor/
 .vscode/
-application/grifts/private.go
-application/swagger.json
-application/vendor/
+
 bin/
-coverage
-coverage.data
-generated/
 jhw.*
 tmp/
 go-build/
 
-application/node_modules/
-application/public/assets/
-application/.routify
-
-docker-compose.override.yml
+dockercfg
