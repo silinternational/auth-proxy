@@ -1,5 +1,8 @@
-FROM caddy:builder
+FROM caddy:builder as builder
 COPY . .
-ARG XCADDY_SKIP_CLEANUP=1
-RUN xcaddy
-CMD caddy
+RUN xcaddy build --with github.com/silinternational/auth-proxy
+
+FROM caddy:latest
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+COPY Caddyfile Caddyfile
+CMD caddy run
