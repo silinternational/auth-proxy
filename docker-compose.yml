@@ -11,24 +11,15 @@ services:
     env_file: local.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
-      - ./site:/srv
-      - caddy_data:/data
-      - caddy_config:/config
     command: caddy run
 
   testapp:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8999:8888"
-      - "443:443"
     env_file: test.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
-      - ./site:/srv
-      - caddy_data:/data
-      - caddy_config:/config
     command: caddy run
 
   test:
@@ -36,56 +27,41 @@ services:
       context: .
       dockerfile: Dockerfile-test
     env_file: test.env
+    depends_on:
+      - testapp
+      - fakemanagementapi
+      - server1
+      - server2
+      - server3
 
   fakemanagementapi:
     image: caddy:latest
-    ports:
-      - "8900:80"
     environment:
       - RESPONSE=API
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
     command: caddy run
+
   server1:
     image: caddy:latest
-    ports:
-      - "8901:80"
-      - "8911:443"
-      - "8921:2019"
     environment:
       - RESPONSE=1
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
     command: caddy run
+
   server2:
     image: caddy:latest
-    ports:
-      - "8902:80"
     environment:
       - RESPONSE=2
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
     command: caddy run
+
   server3:
     image: caddy:latest
-    ports:
-      - "8903:80"
     environment:
       - RESPONSE=3
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
     command: caddy run
-
-volumes:
-  caddy_data:
-    external: true
-  caddy_config:
-

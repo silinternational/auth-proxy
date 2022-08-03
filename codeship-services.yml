@@ -1,0 +1,70 @@
+testapp:
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment:
+    AUTH_COOKIE_NAME: _proxy
+    AUTH_TOKEN_SECRET: Rm9yIEdvZCBzbyBsb3ZlZCB0aGUgd29ybGQgdGhhdCBoZSBnYXZlIGhpcyBvbmUgYW5kIG9ubHkgU29uLCB0aGF0IHdob2V2ZXIgYmVsaWV2ZXMgaW4gaGltIHNoYWxsIG5vdCBwZXJpc2ggYnV0IGhhdmUgZXRlcm5hbCBsaWZlLiAtIEpvaG4gMzoxNg==
+    MANAGEMENT_API: fakemanagementapi:80
+    AUTH_SITE_ONE_LEVEL: one
+    AUTH_SITE_ONE: server1:80
+    AUTH_SITE_TWO_LEVEL: two
+    AUTH_SITE_TWO: server2:80
+    AUTH_SITE_THREE_LEVEL: three
+    AUTH_SITE_THREE: server3:80
+  volumes:
+    - ./Caddyfile:/etc/caddy/Caddyfile
+  command: caddy run
+
+test:
+  build:
+    context: .
+    dockerfile: Dockerfile-test
+  environment:
+    AUTH_COOKIE_NAME: _proxy
+    AUTH_TOKEN_SECRET: Rm9yIEdvZCBzbyBsb3ZlZCB0aGUgd29ybGQgdGhhdCBoZSBnYXZlIGhpcyBvbmUgYW5kIG9ubHkgU29uLCB0aGF0IHdob2V2ZXIgYmVsaWV2ZXMgaW4gaGltIHNoYWxsIG5vdCBwZXJpc2ggYnV0IGhhdmUgZXRlcm5hbCBsaWZlLiAtIEpvaG4gMzoxNg==
+    MANAGEMENT_API: fakemanagementapi:80
+    AUTH_SITE_ONE_LEVEL: one
+    AUTH_SITE_ONE: server1:80
+    AUTH_SITE_TWO_LEVEL: two
+    AUTH_SITE_TWO: server2:80
+    AUTH_SITE_THREE_LEVEL: three
+    AUTH_SITE_THREE: server3:80
+  depends_on:
+    - testapp
+    - fakemanagementapi
+    - server1
+    - server2
+    - server3
+
+fakemanagementapi:
+  image: caddy:latest
+  environment:
+    RESPONSE: API
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run
+
+server1:
+  image: caddy:latest
+  environment:
+    RESPONSE: 1
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run
+
+server2:
+  image: caddy:latest
+  environment:
+    RESPONSE: 2
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run
+
+server3:
+  image: caddy:latest
+  environment:
+    RESPONSE: 3
+  volumes:
+    - ./Caddyfile-test:/srv/Caddyfile
+  command: caddy run
