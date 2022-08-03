@@ -41,6 +41,7 @@ services:
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
+
   server1:
     image: caddy:latest
     environment:
@@ -48,6 +49,7 @@ services:
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
+
   server2:
     image: caddy:latest
     environment:
@@ -55,6 +57,7 @@ services:
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
+
   server3:
     image: caddy:latest
     environment:

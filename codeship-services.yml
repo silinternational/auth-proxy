@@ -2,8 +2,6 @@ testapp:
   build:
     context: .
     dockerfile: Dockerfile
-    expose:
-      - "8888"
   environment:
     AUTH_COOKIE_NAME: _proxy
     AUTH_TOKEN_SECRET: Rm9yIEdvZCBzbyBsb3ZlZCB0aGUgd29ybGQgdGhhdCBoZSBnYXZlIGhpcyBvbmUgYW5kIG9ubHkgU29uLCB0aGF0IHdob2V2ZXIgYmVsaWV2ZXMgaW4gaGltIHNoYWxsIG5vdCBwZXJpc2ggYnV0IGhhdmUgZXRlcm5hbCBsaWZlLiAtIEpvaG4gMzoxNg==
@@ -46,6 +44,7 @@ fakemanagementapi:
   volumes:
     - ./Caddyfile-test:/srv/Caddyfile
   command: caddy run
+
 server1:
   image: caddy:latest
   environment:
@@ -53,6 +52,7 @@ server1:
   volumes:
     - ./Caddyfile-test:/srv/Caddyfile
   command: caddy run
+
 server2:
   image: caddy:latest
   environment:
@@ -60,6 +60,7 @@ server2:
   volumes:
     - ./Caddyfile-test:/srv/Caddyfile
   command: caddy run
+
 server3:
   image: caddy:latest
   environment:
