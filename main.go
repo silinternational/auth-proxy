@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -57,11 +56,6 @@ func NewAuthSite(site string) (AuthSite, error) {
 	if u.Path == "" {
 		result.Path = "/"
 	}
-
-	b, _ := json.Marshal(u)
-	fmt.Println(string(b))
-	b, _ = json.Marshal(result)
-	fmt.Println(string(b))
 
 	return result, nil
 }
