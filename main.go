@@ -53,9 +53,6 @@ func NewAuthSite(site string) (AuthSite, error) {
 	if u.Port() == "" {
 		result.To += ":80"
 	}
-	if u.Path == "" {
-		result.Path = "/"
-	}
 
 	return result, nil
 }
@@ -176,14 +173,18 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	site, err := p.authRedirect(r)
+	upstream, err := p.authRedirect(r)
 	if err != nil {
 		return err
 	}
 
-	caddyhttp.SetVar(r.Context(), "upstream", site.To)
-	caddyhttp.SetVar(r.Context(), "upstream_path", site.Path)
-	p.log.Info("setting upstream to " + site.To + ", path to " + site.Path)
+	if upstream == p.api || upstream.Path == "" {
+		upstream.Path += r.RequestURI
+	}
+
+	caddyhttp.SetVar(r.Context(), "upstream", upstream.To)
+	caddyhttp.SetVar(r.Context(), "upstream_path", upstream.Path)
+	p.log.Info("setting upstream to " + upstream.To + ", path to " + upstream.Path)
 
 	return next.ServeHTTP(w, r)
 }
