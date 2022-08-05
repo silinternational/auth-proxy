@@ -11,11 +11,72 @@ import (
 	"go.uber.org/zap"
 )
 
+func Test_NewAuthSite(t *testing.T) {
+	assert := assert.New(t)
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+		want    AuthSite
+		err     string
+	}{
+		{
+			name:    "no protocol",
+			value:   "noprotocol:9000",
+			wantErr: false,
+			want:    AuthSite{"noprotocol:9000", "/"},
+		},
+		{
+			name:    "no port",
+			value:   "noport",
+			wantErr: false,
+			want:    AuthSite{"noport:80", "/"},
+		},
+		{
+			name:    "ftp",
+			value:   "ftp://ftp:9000",
+			wantErr: false,
+			want:    AuthSite{"ftp:9000", "/"},
+		},
+		{
+			name:    "http",
+			value:   "http://http:9000",
+			wantErr: false,
+			want:    AuthSite{"http:9000", "/"},
+		},
+		{
+			name:    "with path",
+			value:   "http://withpath:9000/test/path",
+			wantErr: false,
+			want:    AuthSite{"withpath:9000", "/test/path"},
+		},
+		{
+			name:    "http.com",
+			value:   "http://http.com:9000",
+			wantErr: false,
+			want:    AuthSite{"http.com:9000", "/"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := NewAuthSite(tc.value)
+			if tc.wantErr {
+				assert.Error(err)
+				assert.Contains(err.Error(), tc.err)
+			} else {
+				assert.NoError(err)
+				assert.Equal(tc.want, got)
+			}
+		})
+	}
+}
+
 func Test_AuthProxy(t *testing.T) {
 	cookieName := "_test"
 	tokenSecret := "secret"
-	managementAPI := "management_api"
-	authURLs := map[string]string{"good": "good url"}
+	managementAPI := AuthSite{"management", "api"}
+	authURLs := map[string]AuthSite{"good": {"good", "url"}}
 	validTime := time.Now().AddDate(0, 0, 1)
 	expiredTime := time.Now().AddDate(0, 0, -1)
 
@@ -23,7 +84,8 @@ func Test_AuthProxy(t *testing.T) {
 		name    string
 		Cookie  *http.Cookie
 		wantErr bool
-		want    string
+		want    AuthSite
+		err     string
 	}{
 		{
 			name:    "no cookie",
@@ -35,7 +97,7 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "invalid cookie",
 			Cookie:  makeTestJWTCookie(cookieName, "bad", "good", validTime),
 			wantErr: true,
-			want:    "signature is invalid",
+			err:     "signature is invalid",
 		},
 		{
 			name:    "expired cookie",
@@ -47,7 +109,7 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "invalid level",
 			Cookie:  makeTestJWTCookie(cookieName, tokenSecret, "bad", validTime),
 			wantErr: true,
-			want:    "unknown auth level",
+			err:     "unknown auth level",
 		},
 		{
 			name:    "valid",
@@ -59,12 +121,12 @@ func Test_AuthProxy(t *testing.T) {
 
 	assert := assert.New(t)
 	proxy := Proxy{
-		ManagementAPI: managementAPI,
 		auth: ProxyAuth{
 			CookieName:  cookieName,
 			TokenSecret: tokenSecret,
 		},
 		sites: authURLs,
+		api:   managementAPI,
 		log:   zap.L(),
 	}
 
@@ -75,13 +137,13 @@ func Test_AuthProxy(t *testing.T) {
 				r.AddCookie(tc.Cookie)
 			}
 
-			to, err := proxy.authRedirect(r)
+			got, err := proxy.authRedirect(r)
 			if tc.wantErr {
 				assert.Error(err)
-				assert.Contains(err.Error(), tc.want)
+				assert.Contains(err.Error(), tc.err)
 			} else {
 				assert.NoError(err)
-				assert.Equal(tc.want, to)
+				assert.Equal(tc.want, got)
 			}
 		})
 	}

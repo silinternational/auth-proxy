@@ -22,7 +22,7 @@ type testResponse struct {
 var (
 	auth  ProxyAuth
 	last  testResponse
-	sites map[string]string
+	sites map[string]AuthSite
 
 	client = http.DefaultClient
 )
@@ -38,10 +38,10 @@ func Test_Functional(t *testing.T) {
 	assert.NoError(t, err)
 	auth.TokenSecret = string(secret)
 
-	sites = make(map[string]string)
-	sites[auth.SiteOneLevel] = auth.SiteOne
-	sites[auth.SiteTwoLevel] = auth.SiteTwo
-	sites[auth.SiteThreeLevel] = auth.SiteThree
+	sites = make(map[string]AuthSite)
+	sites[auth.SiteOneLevel], _ = NewAuthSite(auth.SiteOne)
+	sites[auth.SiteTwoLevel], _ = NewAuthSite(auth.SiteTwo)
+	sites[auth.SiteThreeLevel], _ = NewAuthSite(auth.SiteThree)
 
 	// run function tests
 	status := godog.TestSuite{
@@ -116,7 +116,7 @@ func weWillSeeAnErrorMessage() error {
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest("http://"+sites[level], nil); err != nil {
+	if err := sendRequest("http://"+sites[level].To+sites[level].Path, nil); err != nil {
 		return err
 	}
 

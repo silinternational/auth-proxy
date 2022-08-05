@@ -5,14 +5,10 @@
 :8888 {
 	encode zstd gzip
 
-	respond /test 200 {
-		body {vars.upstream}
-		close
-	}
-
 	dynamic_proxy {
 		management_api {$MANAGEMENT_API}
 	}
 
+	rewrite * {vars.upstream_path}
 	reverse_proxy * {vars.upstream}
 }

@@ -2,8 +2,11 @@ package proxy
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -28,6 +31,41 @@ func init() {
 	httpcaddyfile.RegisterHandlerDirective("dynamic_proxy", parseCaddyfile)
 }
 
+type AuthSite struct {
+	To   string
+	Path string
+}
+
+func NewAuthSite(site string) (AuthSite, error) {
+	// Add protocol if it is missing (needed for url parse)
+	if m, _ := regexp.MatchString("^\\w+://", site); !m {
+		site = "http://" + site
+	}
+
+	u, err := url.Parse(site)
+	if err != nil {
+		return AuthSite{}, err
+	}
+
+	result := AuthSite{
+		To:   u.Host,
+		Path: u.Path,
+	}
+	if u.Port() == "" {
+		result.To += ":80"
+	}
+	if u.Path == "" {
+		result.Path = "/"
+	}
+
+	b, _ := json.Marshal(u)
+	fmt.Println(string(b))
+	b, _ = json.Marshal(result)
+	fmt.Println(string(b))
+
+	return result, nil
+}
+
 type ProxyAuth struct {
 	CookieName     string `required:"true" split_words:"true"`
 	TokenSecret    string `required:"true" split_words:"true"`
@@ -49,7 +87,8 @@ type Proxy struct {
 
 	auth  ProxyAuth
 	claim ProxyClaim
-	sites map[string]string
+	sites map[string]AuthSite
+	api   AuthSite
 
 	log *zap.Logger
 }
@@ -75,10 +114,23 @@ func (p *Proxy) Provision(ctx caddy.Context) error {
 	}
 	p.auth.TokenSecret = string(secret)
 
-	p.sites = make(map[string]string)
-	p.sites[p.auth.SiteOneLevel] = p.auth.SiteOne
-	p.sites[p.auth.SiteTwoLevel] = p.auth.SiteTwo
-	p.sites[p.auth.SiteThreeLevel] = p.auth.SiteThree
+	p.sites = make(map[string]AuthSite)
+	p.sites[p.auth.SiteOneLevel], err = NewAuthSite(p.auth.SiteOne)
+	if err != nil {
+		return err
+	}
+	p.sites[p.auth.SiteTwoLevel], err = NewAuthSite(p.auth.SiteTwo)
+	if err != nil {
+		return err
+	}
+	p.sites[p.auth.SiteThreeLevel], err = NewAuthSite(p.auth.SiteThree)
+	if err != nil {
+		return err
+	}
+	p.api, err = NewAuthSite(p.ManagementAPI)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -130,21 +182,23 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	to, err := p.authRedirect(r)
+	site, err := p.authRedirect(r)
 	if err != nil {
 		return err
 	}
-	caddyhttp.SetVar(r.Context(), "upstream", to)
-	p.log.Info("setting upstream to " + to)
+
+	caddyhttp.SetVar(r.Context(), "upstream", site.To)
+	caddyhttp.SetVar(r.Context(), "upstream_path", site.Path)
+	p.log.Info("setting upstream to " + site.To + ", path to " + site.Path)
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(r *http.Request) (string, error) {
+func (p Proxy) authRedirect(r *http.Request) (AuthSite, error) {
 	// if no cookie, redirect to get new cookie
 	cookie, err := r.Cookie(p.auth.CookieName)
 	if err != nil {
-		return p.ManagementAPI, nil
+		return p.api, nil
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -155,14 +209,14 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 		return []byte(p.auth.TokenSecret), nil
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
-		return p.ManagementAPI, nil
+		return p.api, nil
 	} else if err != nil {
-		return "", err
+		return AuthSite{}, err
 	}
 
 	result, ok := p.sites[p.claim.Level]
 	if !ok {
-		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
+		return AuthSite{}, fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
 
 	return result, nil
