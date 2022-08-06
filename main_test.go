@@ -24,7 +24,7 @@ func Test_NewAuthSite(t *testing.T) {
 			name:    "no protocol",
 			value:   "noprotocol:9000",
 			wantErr: false,
-			want:    AuthSite{"noprotocol:9000", "/"},
+			want:    AuthSite{"noprotocol:9000", ""},
 		},
 		{
 			name:    "no port",
