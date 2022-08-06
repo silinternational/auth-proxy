@@ -30,19 +30,19 @@ func Test_NewAuthSite(t *testing.T) {
 			name:    "no port",
 			value:   "noport",
 			wantErr: false,
-			want:    AuthSite{"noport:80", "/"},
+			want:    AuthSite{"noport:80", ""},
 		},
 		{
 			name:    "ftp",
 			value:   "ftp://ftp:9000",
 			wantErr: false,
-			want:    AuthSite{"ftp:9000", "/"},
+			want:    AuthSite{"ftp:9000", ""},
 		},
 		{
 			name:    "http",
 			value:   "http://http:9000",
 			wantErr: false,
-			want:    AuthSite{"http:9000", "/"},
+			want:    AuthSite{"http:9000", ""},
 		},
 		{
 			name:    "with path",
@@ -54,7 +54,7 @@ func Test_NewAuthSite(t *testing.T) {
 			name:    "http.com",
 			value:   "http://http.com:9000",
 			wantErr: false,
-			want:    AuthSite{"http.com:9000", "/"},
+			want:    AuthSite{"http.com:9000", ""},
 		},
 	}
 
