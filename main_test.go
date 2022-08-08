@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func Test_NewAuthSite(t *testing.T) {
+func Test_AuthSiteDecode(t *testing.T) {
 	assert := assert.New(t)
 	tests := []struct {
 		name    string
@@ -20,6 +20,12 @@ func Test_NewAuthSite(t *testing.T) {
 		want    AuthSite
 		err     string
 	}{
+		{
+			name:    "nothing",
+			value:   "",
+			wantErr: true,
+			err:     "cannot decode empty string",
+		},
 		{
 			name:    "no protocol",
 			value:   "noprotocol:9000",
@@ -58,12 +64,12 @@ func Test_NewAuthSite(t *testing.T) {
 		},
 	}
 
+	var got AuthSite
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := NewAuthSite(tc.value)
+			err := got.Decode(tc.value)
 			if tc.wantErr {
-				assert.Error(err)
-				assert.Contains(err.Error(), tc.err)
+				assert.ErrorContains(err, tc.err)
 			} else {
 				assert.NoError(err)
 				assert.Equal(tc.want, got)
@@ -124,10 +130,10 @@ func Test_AuthProxy(t *testing.T) {
 		auth: ProxyAuth{
 			CookieName:  cookieName,
 			TokenSecret: tokenSecret,
+			Sites:       authURLs,
 		},
-		sites: authURLs,
-		api:   managementAPI,
-		log:   zap.L(),
+		api: managementAPI,
+		log: zap.L(),
 	}
 
 	for _, tc := range tests {
@@ -139,8 +145,7 @@ func Test_AuthProxy(t *testing.T) {
 
 			got, err := proxy.authRedirect(r)
 			if tc.wantErr {
-				assert.Error(err)
-				assert.Contains(err.Error(), tc.err)
+				assert.ErrorContains(err, tc.err)
 			} else {
 				assert.NoError(err)
 				assert.Equal(tc.want, got)

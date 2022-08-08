@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -30,42 +31,69 @@ func init() {
 	httpcaddyfile.RegisterHandlerDirective("dynamic_proxy", parseCaddyfile)
 }
 
+type AuthSites map[string]AuthSite
+
+func (a *AuthSites) Decode(input string) error {
+	*a = make(AuthSites)
+	sites := strings.Split(input, ";")
+	for _, site := range sites {
+		if site == "" {
+			break
+		}
+
+		level, site, found := strings.Cut(site, ":")
+		if !found {
+			return fmt.Errorf("unable to decode env variable: %v", level)
+		}
+
+		var as AuthSite
+		if err := as.Decode(site); err != nil {
+			return err
+		}
+
+		(*a)[level] = as
+	}
+
+	return nil
+}
+
 type AuthSite struct {
 	To   string
 	Path string
 }
 
-func NewAuthSite(site string) (AuthSite, error) {
-	// Add protocol if it is missing (needed for url parse)
-	if m, _ := regexp.MatchString("^\\w+://", site); !m {
-		site = "http://" + site
+func (a *AuthSite) Decode(input string) error {
+	if input == "" {
+		return fmt.Errorf("cannot decode empty string")
 	}
 
-	u, err := url.Parse(site)
+	re, err := regexp.Compile(`^\w+://`)
 	if err != nil {
-		return AuthSite{}, err
+		return err
 	}
 
-	result := AuthSite{
-		To:   u.Host,
-		Path: u.Path,
+	// Add protocol if it is missing (needed for url parse)
+	if !re.MatchString(input) {
+		input = "http://" + input
 	}
+
+	u, err := url.Parse(input)
+	if err != nil {
+		return err
+	}
+
+	a.To, a.Path = u.Host, u.Path
 	if u.Port() == "" {
-		result.To += ":80"
+		a.To += ":80"
 	}
 
-	return result, nil
+	return nil
 }
 
 type ProxyAuth struct {
-	CookieName     string `required:"true" split_words:"true"`
-	TokenSecret    string `required:"true" split_words:"true"`
-	SiteOne        string `required:"true" split_words:"true"`
-	SiteOneLevel   string `required:"true" split_words:"true"`
-	SiteTwo        string `required:"true" split_words:"true"`
-	SiteTwoLevel   string `required:"true" split_words:"true"`
-	SiteThree      string `required:"true" split_words:"true"`
-	SiteThreeLevel string `required:"true" split_words:"true"`
+	CookieName  string    `required:"true" split_words:"true"`
+	TokenSecret string    `required:"true" split_words:"true"`
+	Sites       AuthSites `required:"true" split_words:"true"`
 }
 
 type ProxyClaim struct {
@@ -78,7 +106,6 @@ type Proxy struct {
 
 	auth  ProxyAuth
 	claim ProxyClaim
-	sites map[string]AuthSite
 	api   AuthSite
 
 	log *zap.Logger
@@ -105,21 +132,7 @@ func (p *Proxy) Provision(ctx caddy.Context) error {
 	}
 	p.auth.TokenSecret = string(secret)
 
-	p.sites = make(map[string]AuthSite)
-	p.sites[p.auth.SiteOneLevel], err = NewAuthSite(p.auth.SiteOne)
-	if err != nil {
-		return err
-	}
-	p.sites[p.auth.SiteTwoLevel], err = NewAuthSite(p.auth.SiteTwo)
-	if err != nil {
-		return err
-	}
-	p.sites[p.auth.SiteThreeLevel], err = NewAuthSite(p.auth.SiteThree)
-	if err != nil {
-		return err
-	}
-	p.api, err = NewAuthSite(p.ManagementAPI)
-	if err != nil {
+	if err := p.api.Decode(p.ManagementAPI); err != nil {
 		return err
 	}
 
@@ -140,7 +153,7 @@ func (p Proxy) Validate() error {
 		return fmt.Errorf("missing `AUTH_TOKEN_SECRET`")
 	}
 
-	if len(p.sites) == 0 {
+	if len(p.auth.Sites) == 0 {
 		return fmt.Errorf("missing `AUTH_URLS`")
 	}
 
@@ -209,7 +222,7 @@ func (p Proxy) authRedirect(r *http.Request) (AuthSite, error) {
 		return AuthSite{}, err
 	}
 
-	result, ok := p.sites[p.claim.Level]
+	result, ok := p.auth.Sites[p.claim.Level]
 	if !ok {
 		return AuthSite{}, fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}

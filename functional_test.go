@@ -20,9 +20,9 @@ type testResponse struct {
 }
 
 var (
-	auth  ProxyAuth
-	last  testResponse
-	sites map[string]AuthSite
+	auth          ProxyAuth
+	last          testResponse
+	managementAPI AuthSite
 
 	client = http.DefaultClient
 )
@@ -31,17 +31,15 @@ const testURL = "http://testapp:8888"
 
 func Test_Functional(t *testing.T) {
 	// setup
-	err := envconfig.Process("auth", &auth)
+	err := managementAPI.Decode(os.Getenv("MANAGEMENT_API"))
+	assert.NoError(t, err)
+
+	err = envconfig.Process("auth", &auth)
 	assert.NoError(t, err)
 
 	secret, err := base64.StdEncoding.DecodeString(auth.TokenSecret)
 	assert.NoError(t, err)
 	auth.TokenSecret = string(secret)
-
-	sites = make(map[string]AuthSite)
-	sites[auth.SiteOneLevel], _ = NewAuthSite(auth.SiteOne)
-	sites[auth.SiteTwoLevel], _ = NewAuthSite(auth.SiteTwo)
-	sites[auth.SiteThreeLevel], _ = NewAuthSite(auth.SiteThree)
 
 	// run function tests
 	status := godog.TestSuite{
@@ -99,7 +97,11 @@ func weSendARequestWithAuthorizationData(t string) error {
 
 func weWillBeRedirectedToTheManagementApi() error {
 	proxy := last
-	if err := sendRequest("http://"+os.Getenv("MANAGEMENT_API"), nil); err != nil {
+	site := "http://" + managementAPI.To
+	if managementAPI.Path != "" {
+		site += managementAPI.Path + "/"
+	}
+	if err := sendRequest(site, nil); err != nil {
 		return err
 	}
 
@@ -116,7 +118,7 @@ func weWillSeeAnErrorMessage() error {
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest("http://"+sites[level].To+sites[level].Path, nil); err != nil {
+	if err := sendRequest("http://"+auth.Sites[level].To+auth.Sites[level].Path, nil); err != nil {
 		return err
 	}
 
