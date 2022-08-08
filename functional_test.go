@@ -27,7 +27,7 @@ var (
 	client = http.DefaultClient
 )
 
-const testURL = "http://testapp:8888"
+const testURL = "http://testapp"
 
 func Test_Functional(t *testing.T) {
 	// setup
