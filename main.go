@@ -35,13 +35,13 @@ type AuthSites map[string]AuthSite
 
 func (a *AuthSites) Decode(input string) error {
 	*a = make(AuthSites)
-	sites := strings.Split(input, ";")
-	for _, site := range sites {
-		if site == "" {
+	sites := strings.Split(input, ",")
+	for _, s := range sites {
+		if s == "" {
 			break
 		}
 
-		level, site, found := strings.Cut(site, ":")
+		level, site, found := strings.Cut(s, ":")
 		if !found {
 			return fmt.Errorf("unable to decode env variable: %v", level)
 		}
