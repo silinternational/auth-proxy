@@ -2,7 +2,7 @@
 	order dynamic_proxy first
 }
 
-:8888 {
+:80 {
 	encode zstd gzip
 
 	respond /test 200 {

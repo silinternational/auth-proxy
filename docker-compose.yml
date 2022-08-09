@@ -6,8 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8888:8888"
-      - "443:443"
+      - "53060:80"
+      - "53061:443"
+      - "53062:2019"
     env_file: local.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
