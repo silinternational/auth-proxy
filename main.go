@@ -144,6 +144,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	// if no cookie, redirect to get new cookie
 	cookie, err := r.Cookie(p.auth.CookieName)
 	if err != nil {
+		p.log.Info("no jwt exists, calling management api")
 		return p.ManagementAPI, nil
 	}
 
@@ -155,6 +156,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 		return []byte(p.auth.TokenSecret), nil
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
+		p.log.Info("jwt has expired")
 		return p.ManagementAPI, nil
 	} else if err != nil {
 		return "", err
