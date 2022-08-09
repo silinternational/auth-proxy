@@ -6,8 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8888:8888"
-      - "443:443"
+      - "53060:80"
+      - "53061:443"
+      - "53062:2019"
     env_file: local.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
@@ -23,10 +24,11 @@ services:
     command: caddy run
 
   test:
-    build:
-      context: .
-      dockerfile: Dockerfile-test
+    image: golang:1.18
     env_file: test.env
+    volumes:
+      - .:/src
+    working_dir: /src
     depends_on:
       - testapp
       - fakemanagementapi

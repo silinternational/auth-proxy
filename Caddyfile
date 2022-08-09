@@ -2,13 +2,8 @@
 	order dynamic_proxy first
 }
 
-:8888 {
+:80 {
 	encode zstd gzip
-
-	respond /test 200 {
-		body {vars.upstream}
-		close
-	}
 
 	dynamic_proxy {
 		management_api {$MANAGEMENT_API}
