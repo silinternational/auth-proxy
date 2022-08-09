@@ -23,10 +23,11 @@ services:
     command: caddy run
 
   test:
-    build:
-      context: .
-      dockerfile: Dockerfile-test
+    image: golang:1.18
     env_file: test.env
+    volumes:
+      - .:/src
+    working_dir: /src
     depends_on:
       - testapp
       - fakemanagementapi
