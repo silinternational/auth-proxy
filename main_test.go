@@ -24,7 +24,6 @@ func Test_AuthProxy(t *testing.T) {
 		cookie  *http.Cookie
 		want    string
 		wantErr bool
-		err     string
 	}{
 		{
 			name:    "no cookie",
@@ -36,7 +35,7 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "invalid cookie",
 			cookie:  makeTestJWTCookie(cookieName, "bad", "good", validTime),
 			wantErr: true,
-			err:     "signature is invalid",
+			want:    "signature is invalid",
 		},
 		{
 			name:    "expired cookie",
@@ -48,7 +47,7 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "invalid level",
 			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "bad", validTime),
 			wantErr: true,
-			err:     "unknown auth level",
+			want:    "unknown auth level",
 		},
 		{
 			name:    "valid",
@@ -78,7 +77,7 @@ func Test_AuthProxy(t *testing.T) {
 
 			to, err := proxy.authRedirect(r)
 			if tc.wantErr {
-				assert.ErrorContains(err, tc.err)
+				assert.ErrorContains(err, tc.want)
 			} else {
 				assert.NoError(err)
 				assert.Equal(tc.want, to)
