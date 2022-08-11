@@ -22,8 +22,8 @@ func Test_AuthProxy(t *testing.T) {
 	tests := []struct {
 		name    string
 		cookie  *http.Cookie
-		want    string
 		wantErr bool
+		want    string
 	}{
 		{
 			name:    "no cookie",
