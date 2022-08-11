@@ -125,9 +125,8 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 	if err != nil {
 		return err
 	}
-
 	caddyhttp.SetVar(r.Context(), "upstream", to)
-	p.log.Info("setting proxy to " + to)
+	p.log.Info("setting upstream to " + to)
 
 	return next.ServeHTTP(w, r)
 }
