@@ -22,7 +22,6 @@ func Test_AuthProxy(t *testing.T) {
 	tests := []struct {
 		name    string
 		cookie  *http.Cookie
-		action  string
 		want    string
 		wantErr bool
 		err     string
@@ -31,7 +30,6 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "no cookie",
 			cookie:  nil,
 			wantErr: false,
-			action:  ActionRedirect,
 			want:    managementAPI,
 		},
 		{
@@ -44,7 +42,6 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "expired cookie",
 			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", expiredTime),
 			wantErr: false,
-			action:  ActionRedirect,
 			want:    managementAPI,
 		},
 		{
@@ -57,7 +54,6 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "valid",
 			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", validTime),
 			wantErr: false,
-			action:  ActionReverseProxy,
 			want:    authURLs["good"],
 		},
 	}
@@ -80,12 +76,11 @@ func Test_AuthProxy(t *testing.T) {
 				r.AddCookie(tc.cookie)
 			}
 
-			action, to, err := proxy.authRedirect(r)
+			to, err := proxy.authRedirect(r)
 			if tc.wantErr {
 				assert.ErrorContains(err, tc.err)
 			} else {
 				assert.NoError(err)
-				assert.Equal(tc.action, action)
 				assert.Equal(tc.want, to)
 			}
 		})

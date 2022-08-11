@@ -15,11 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	ActionRedirect     = "redir"
-	ActionReverseProxy = "reverse_proxy"
-)
-
 // Interface guards
 var (
 	_ caddy.Provisioner           = (*Proxy)(nil)
@@ -126,24 +121,23 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	action, to, err := p.authRedirect(r)
+	to, err := p.authRedirect(r)
 	if err != nil {
 		return err
 	}
 
-	caddyhttp.SetVar(r.Context(), "action", action)
 	caddyhttp.SetVar(r.Context(), "upstream", to)
-	p.log.Info("setting proxy to " + action + " to " + to)
+	p.log.Info("setting proxy to " + to)
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(r *http.Request) (string, string, error) {
+func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	// if no cookie, redirect to get new cookie
 	cookie, err := r.Cookie(p.auth.CookieName)
 	if err != nil {
 		p.log.Info("no jwt exists, calling management api")
-		return ActionRedirect, p.auth.ManagementAPI, nil
+		return p.auth.ManagementAPI, nil
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -155,17 +149,17 @@ func (p Proxy) authRedirect(r *http.Request) (string, string, error) {
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
-		return ActionRedirect, p.auth.ManagementAPI, nil
+		return p.auth.ManagementAPI, nil
 	} else if err != nil {
-		return ActionReverseProxy, "", err
+		return "", err
 	}
 
 	result, ok := p.sites[p.claim.Level]
 	if !ok {
-		return ActionReverseProxy, "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
+		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
 
-	return ActionReverseProxy, result, nil
+	return result, nil
 }
 
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {

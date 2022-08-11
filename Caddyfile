@@ -7,8 +7,8 @@
 
 	dynamic_proxy
 
-	@redirect expression {vars.action} == "redir"
-	@reverseproxy expression {vars.action} != "redir"
+	@redirect expression {vars.upstream} == {$AUTH_MANAGEMENT_API}
+	@reverseproxy expression {vars.upstream} != {$AUTH_MANAGEMENT_API}
 
 	redir @redirect "{$AUTH_MANAGEMENT_API}?returnTo={uri}"
 	reverse_proxy @reverseproxy {vars.upstream}
