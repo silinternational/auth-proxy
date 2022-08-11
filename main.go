@@ -15,6 +15,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	ActionRedirect     = "redir"
+	ActionReverseProxy = "reverse_proxy"
+)
+
 // Interface guards
 var (
 	_ caddy.Provisioner           = (*Proxy)(nil)
@@ -29,6 +34,7 @@ func init() {
 }
 
 type ProxyAuth struct {
+	ManagementAPI  string `required:"true" split_words:"true"`
 	CookieName     string `required:"true" split_words:"true"`
 	TokenSecret    string `required:"true" split_words:"true"`
 	SiteOne        string `required:"true" split_words:"true"`
@@ -45,8 +51,6 @@ type ProxyClaim struct {
 }
 
 type Proxy struct {
-	ManagementAPI string `json:"management_api,omitempty"`
-
 	auth  ProxyAuth
 	claim ProxyClaim
 	sites map[string]string
@@ -85,10 +89,6 @@ func (p *Proxy) Provision(ctx caddy.Context) error {
 
 // Validate implements caddy.Validator.
 func (p Proxy) Validate() error {
-	if p.ManagementAPI == "" {
-		return fmt.Errorf("missing `management_api` in `dynamic_proxy`")
-	}
-
 	if p.auth.CookieName == "" {
 		return fmt.Errorf("missing `AUTH_COOKIE_NAME`")
 	}
@@ -110,10 +110,6 @@ func (p *Proxy) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 
 	for d.NextBlock(0) {
 		switch d.Val() {
-		case "management_api":
-			if !d.AllArgs(&p.ManagementAPI) {
-				return d.ArgErr()
-			}
 		default:
 			return fmt.Errorf("unknown option `%s` in `dynamic_proxy`", d.Val())
 		}
@@ -130,22 +126,24 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	to, err := p.authRedirect(r)
+	action, to, err := p.authRedirect(r)
 	if err != nil {
 		return err
 	}
+
+	caddyhttp.SetVar(r.Context(), "action", action)
 	caddyhttp.SetVar(r.Context(), "upstream", to)
-	p.log.Info("setting upstream to " + to)
+	p.log.Info("setting proxy to " + action + " to " + to)
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(r *http.Request) (string, error) {
+func (p Proxy) authRedirect(r *http.Request) (string, string, error) {
 	// if no cookie, redirect to get new cookie
 	cookie, err := r.Cookie(p.auth.CookieName)
 	if err != nil {
 		p.log.Info("no jwt exists, calling management api")
-		return p.ManagementAPI, nil
+		return ActionRedirect, p.auth.ManagementAPI, nil
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -157,17 +155,17 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
-		return p.ManagementAPI, nil
+		return ActionRedirect, p.auth.ManagementAPI, nil
 	} else if err != nil {
-		return "", err
+		return ActionReverseProxy, "", err
 	}
 
 	result, ok := p.sites[p.claim.Level]
 	if !ok {
-		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
+		return ActionReverseProxy, "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
 
-	return result, nil
+	return ActionReverseProxy, result, nil
 }
 
 func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {

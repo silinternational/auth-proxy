@@ -21,45 +21,49 @@ func Test_AuthProxy(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		Cookie  *http.Cookie
-		wantErr bool
+		cookie  *http.Cookie
+		action  string
 		want    string
+		wantErr bool
+		err     string
 	}{
 		{
 			name:    "no cookie",
-			Cookie:  nil,
+			cookie:  nil,
 			wantErr: false,
+			action:  ActionRedirect,
 			want:    managementAPI,
 		},
 		{
 			name:    "invalid cookie",
-			Cookie:  makeTestJWTCookie(cookieName, "bad", "good", validTime),
+			cookie:  makeTestJWTCookie(cookieName, "bad", "good", validTime),
 			wantErr: true,
-			want:    "signature is invalid",
+			err:     "signature is invalid",
 		},
 		{
 			name:    "expired cookie",
-			Cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", expiredTime),
+			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", expiredTime),
 			wantErr: false,
+			action:  ActionRedirect,
 			want:    managementAPI,
 		},
 		{
 			name:    "invalid level",
-			Cookie:  makeTestJWTCookie(cookieName, tokenSecret, "bad", validTime),
+			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "bad", validTime),
 			wantErr: true,
-			want:    "unknown auth level",
+			err:     "unknown auth level",
 		},
 		{
 			name:    "valid",
-			Cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", validTime),
+			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", validTime),
 			wantErr: false,
+			action:  ActionReverseProxy,
 			want:    authURLs["good"],
 		},
 	}
 
 	assert := assert.New(t)
 	proxy := Proxy{
-		ManagementAPI: managementAPI,
 		auth: ProxyAuth{
 			CookieName:  cookieName,
 			TokenSecret: tokenSecret,
@@ -70,17 +74,18 @@ func Test_AuthProxy(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			if tc.Cookie != nil {
-				r.AddCookie(tc.Cookie)
+			if tc.cookie != nil {
+				r.AddCookie(tc.cookie)
 			}
 
-			to, err := proxy.authRedirect(r)
+			action, to, err := proxy.authRedirect(r)
 			if tc.wantErr {
-				assert.Error(err)
-				assert.Contains(err.Error(), tc.want)
+				assert.ErrorContains(err, tc.err)
 			} else {
 				assert.NoError(err)
+				assert.Equal(tc.action, action)
 				assert.Equal(tc.want, to)
 			}
 		})

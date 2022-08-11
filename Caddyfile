@@ -5,9 +5,11 @@
 :80 {
 	encode zstd gzip
 
-	dynamic_proxy {
-		management_api {$MANAGEMENT_API}
-	}
+	dynamic_proxy
 
-	reverse_proxy * {vars.upstream}
+	@redirect expression {vars.action} == "redir"
+	@reverseproxy expression {vars.action} != "redir"
+
+	redir @redirect "{$AUTH_MANAGEMENT_API}?returnTo={uri}"
+	reverse_proxy @reverseproxy {vars.upstream}
 }

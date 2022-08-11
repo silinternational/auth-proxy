@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -98,12 +97,17 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	proxy := last
-	if err := sendRequest("http://"+os.Getenv("MANAGEMENT_API"), nil); err != nil {
+	err := assertExpectedAndActual(assert.Equal, http.StatusTemporaryRedirect, last.response.StatusCode)
+	if err != nil {
 		return err
 	}
 
-	return assertExpectedAndActual(assert.Equal, last.body, proxy.body)
+	loc, err := last.response.Location()
+	if err != nil {
+		return err
+	}
+
+	return assertExpectedAndActual(assert.Equal, auth.ManagementAPI, loc.String())
 }
 
 func weDoNotSeeAnErrorMessage() error {
