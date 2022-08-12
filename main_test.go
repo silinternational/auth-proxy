@@ -12,12 +12,19 @@ import (
 )
 
 func Test_AuthProxy(t *testing.T) {
+	assert := assert.New(t)
 	cookieName := "_test"
 	tokenSecret := "secret"
 	managementAPI := "management_api"
-	authURLs := map[string]string{"good": "good url"}
+	authURLs := AuthSites{"good": "good url"}
 	validTime := time.Now().AddDate(0, 0, 1)
 	expiredTime := time.Now().AddDate(0, 0, -1)
+	proxy := Proxy{
+		cookieName:  cookieName,
+		tokenSecret: tokenSecret,
+		sites:       authURLs,
+		log:         zap.L(),
+	}
 
 	tests := []struct {
 		name    string
@@ -55,16 +62,6 @@ func Test_AuthProxy(t *testing.T) {
 			wantErr: false,
 			want:    authURLs["good"],
 		},
-	}
-
-	assert := assert.New(t)
-	proxy := Proxy{
-		auth: ProxyAuth{
-			CookieName:  cookieName,
-			TokenSecret: tokenSecret,
-		},
-		sites: authURLs,
-		log:   zap.L(),
 	}
 
 	for _, tc := range tests {
