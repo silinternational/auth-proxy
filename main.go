@@ -29,6 +29,7 @@ func init() {
 }
 
 type ProxyAuth struct {
+	ManagementAPI  string `required:"true" split_words:"true"`
 	CookieName     string `required:"true" split_words:"true"`
 	TokenSecret    string `required:"true" split_words:"true"`
 	SiteOne        string `required:"true" split_words:"true"`
@@ -45,8 +46,6 @@ type ProxyClaim struct {
 }
 
 type Proxy struct {
-	ManagementAPI string `json:"management_api,omitempty"`
-
 	auth  ProxyAuth
 	claim ProxyClaim
 	sites map[string]string
@@ -85,10 +84,6 @@ func (p *Proxy) Provision(ctx caddy.Context) error {
 
 // Validate implements caddy.Validator.
 func (p Proxy) Validate() error {
-	if p.ManagementAPI == "" {
-		return fmt.Errorf("missing `management_api` in `dynamic_proxy`")
-	}
-
 	if p.auth.CookieName == "" {
 		return fmt.Errorf("missing `AUTH_COOKIE_NAME`")
 	}
@@ -110,10 +105,6 @@ func (p *Proxy) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 
 	for d.NextBlock(0) {
 		switch d.Val() {
-		case "management_api":
-			if !d.AllArgs(&p.ManagementAPI) {
-				return d.ArgErr()
-			}
 		default:
 			return fmt.Errorf("unknown option `%s` in `dynamic_proxy`", d.Val())
 		}
@@ -145,7 +136,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	cookie, err := r.Cookie(p.auth.CookieName)
 	if err != nil {
 		p.log.Info("no jwt exists, calling management api")
-		return p.ManagementAPI, nil
+		return p.auth.ManagementAPI, nil
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -157,7 +148,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
-		return p.ManagementAPI, nil
+		return p.auth.ManagementAPI, nil
 	} else if err != nil {
 		return "", err
 	}

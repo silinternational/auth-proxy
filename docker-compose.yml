@@ -38,32 +38,24 @@ services:
 
   fakemanagementapi:
     image: caddy:latest
-    environment:
-      - RESPONSE=API
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server1:
     image: caddy:latest
-    environment:
-      - RESPONSE=1
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server2:
     image: caddy:latest
-    environment:
-      - RESPONSE=2
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server3:
     image: caddy:latest
-    environment:
-      - RESPONSE=3
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
