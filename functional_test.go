@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -9,7 +8,6 @@ import (
 	"time"
 
 	"github.com/cucumber/godog"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,9 +17,8 @@ type testResponse struct {
 }
 
 var (
-	auth  ProxyAuth
-	last  testResponse
-	sites map[string]string
+	p    Proxy
+	last testResponse
 
 	client = http.DefaultClient
 )
@@ -30,21 +27,13 @@ const testURL = "http://testapp"
 
 func Test_Functional(t *testing.T) {
 	// setup
-	err := envconfig.Process("auth", &auth)
+	var err error
+	p, err = newProxy()
 	assert.NoError(t, err)
 
-	secret, err := base64.StdEncoding.DecodeString(auth.TokenSecret)
-	assert.NoError(t, err)
-	auth.TokenSecret = string(secret)
-
-	sites = make(map[string]string)
-	sites[auth.SiteOneLevel] = auth.SiteOne
-	sites[auth.SiteTwoLevel] = auth.SiteTwo
-	sites[auth.SiteThreeLevel] = auth.SiteThree
-
-	// run function tests
+	// run functional tests
 	status := godog.TestSuite{
-		Name:                "godogs",
+		Name:                "functional tests",
 		ScenarioInitializer: InitializeScenario,
 	}.Run()
 
@@ -77,7 +66,7 @@ func sendRequest(url string, c *http.Cookie) error {
 }
 
 func weSendARequestWithValidAuthorizationDataAuthorizingAccess(level string) error {
-	c := makeTestJWTCookie(auth.CookieName, auth.TokenSecret, level, time.Now().AddDate(0, 0, 1))
+	c := makeTestJWTCookie(p.cookieName, p.tokenSecret, level, time.Now().AddDate(0, 0, 1))
 	return sendRequest(testURL, c)
 }
 
@@ -85,9 +74,9 @@ func weSendARequestWithAuthorizationData(t string) error {
 	var c *http.Cookie
 	switch t {
 	case "expired":
-		c = makeTestJWTCookie(auth.CookieName, auth.TokenSecret, "level", time.Now().AddDate(0, 0, -1))
+		c = makeTestJWTCookie(p.cookieName, p.tokenSecret, "level", time.Now().AddDate(0, 0, -1))
 	case "invalid":
-		c = makeTestJWTCookie(auth.CookieName, "bad", "level", time.Now().AddDate(0, 0, 1))
+		c = makeTestJWTCookie(p.cookieName, "bad", "level", time.Now().AddDate(0, 0, 1))
 	case "no":
 		c = nil
 	default:
@@ -97,7 +86,7 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	err := assertExpectedAndActual(assert.Equal, http.StatusTemporaryRedirect, last.response.StatusCode)
+	err := assertEqual(http.StatusTemporaryRedirect, last.response.StatusCode)
 	if err != nil {
 		return err
 	}
@@ -107,24 +96,24 @@ func weWillBeRedirectedToTheManagementApi() error {
 		return err
 	}
 
-	return assertExpectedAndActual(assert.Equal, auth.ManagementAPI, loc.String())
+	return assertEqual(p.managementAPI, loc.String())
 }
 
 func weDoNotSeeAnErrorMessage() error {
-	return assertExpectedAndActual(assert.Equal, 200, last.response.StatusCode)
+	return assertEqual(http.StatusOK, last.response.StatusCode)
 }
 
 func weWillSeeAnErrorMessage() error {
-	return assertExpectedAndActual(assert.Equal, 500, last.response.StatusCode)
+	return assertEqual(http.StatusInternalServerError, last.response.StatusCode)
 }
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest("http://"+sites[level], nil); err != nil {
+	if err := sendRequest("http://"+p.sites[level], nil); err != nil {
 		return err
 	}
 
-	return assertExpectedAndActual(assert.Equal, last.body, proxy.body)
+	return assertEqual(last.body, proxy.body)
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
@@ -137,29 +126,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 }
 
 // Helper functions
-
-// assertExpectedAndActual is a helper function to allow the step function to call
-// assertion functions where you want to compare an expected and an actual value.
-func assertExpectedAndActual(a expectedAndActualAssertion, expected, actual interface{}, msgAndArgs ...interface{}) error {
-	var t asserter
-	a(&t, expected, actual, msgAndArgs...)
-	return t.err
-}
-
-type expectedAndActualAssertion func(t assert.TestingT, expected, actual interface{}, msgAndArgs ...interface{}) bool
-
-// assertActual is a helper function to allow the step function to call
-// assertion functions where you want to compare an actual value to a
-// predined state like nil, empty or true/false.
-func assertActual(a actualAssertion, actual interface{}, msgAndArgs ...interface{}) error {
-	var t asserter
-	a(&t, actual, msgAndArgs...)
-	return t.err
-}
-
-type actualAssertion func(t assert.TestingT, actual interface{}, msgAndArgs ...interface{}) bool
-
-// asserter is used to be able to retrieve the error reported by the called assertion
 type asserter struct {
 	err error
 }
@@ -167,4 +133,10 @@ type asserter struct {
 // Errorf is used by the called assertion to report an error
 func (a *asserter) Errorf(format string, args ...interface{}) {
 	a.err = fmt.Errorf(format, args...)
+}
+
+func assertEqual(expected, actual interface{}, msgAndArgs ...interface{}) error {
+	var a asserter
+	assert.Equal(&a, expected, actual, msgAndArgs...)
+	return a.err
 }

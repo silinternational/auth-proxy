@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/caddyserver/caddy/v2"
-	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/golang-jwt/jwt/v4"
@@ -18,26 +17,12 @@ import (
 // Interface guards
 var (
 	_ caddy.Provisioner           = (*Proxy)(nil)
-	_ caddy.Validator             = (*Proxy)(nil)
 	_ caddyhttp.MiddlewareHandler = (*Proxy)(nil)
-	_ caddyfile.Unmarshaler       = (*Proxy)(nil)
 )
 
 func init() {
 	caddy.RegisterModule(Proxy{})
-	httpcaddyfile.RegisterHandlerDirective("dynamic_proxy", parseCaddyfile)
-}
-
-type ProxyAuth struct {
-	ManagementAPI  string `required:"true" split_words:"true"`
-	CookieName     string `required:"true" split_words:"true"`
-	TokenSecret    string `required:"true" split_words:"true"`
-	SiteOne        string `required:"true" split_words:"true"`
-	SiteOneLevel   string `required:"true" split_words:"true"`
-	SiteTwo        string `required:"true" split_words:"true"`
-	SiteTwoLevel   string `required:"true" split_words:"true"`
-	SiteThree      string `required:"true" split_words:"true"`
-	SiteThreeLevel string `required:"true" split_words:"true"`
+	httpcaddyfile.RegisterHandlerDirective("dynamic_proxy", newDynamicProxy)
 }
 
 type ProxyClaim struct {
@@ -46,11 +31,13 @@ type ProxyClaim struct {
 }
 
 type Proxy struct {
-	auth  ProxyAuth
-	claim ProxyClaim
-	sites map[string]string
+	cookieName    string    `required:"true" split_words:"true"`
+	tokenSecret   string    `required:"true" split_words:"true"`
+	sites         AuthSites `required:"true" split_words:"true"`
+	managementAPI string    `required:"true" split_words:"true"`
 
-	log *zap.Logger
+	claim ProxyClaim  `ignored:"true"`
+	log   *zap.Logger `ignored:"true"`
 }
 
 func (Proxy) CaddyModule() caddy.ModuleInfo {
@@ -60,56 +47,8 @@ func (Proxy) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
-// Provision implements caddy.Provisioner.
 func (p *Proxy) Provision(ctx caddy.Context) error {
 	p.log = ctx.Logger(p)
-
-	if err := envconfig.Process("auth", &p.auth); err != nil {
-		return err
-	}
-
-	secret, err := base64.StdEncoding.DecodeString(p.auth.TokenSecret)
-	if err != nil {
-		return fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
-	}
-	p.auth.TokenSecret = string(secret)
-
-	p.sites = make(map[string]string)
-	p.sites[p.auth.SiteOneLevel] = p.auth.SiteOne
-	p.sites[p.auth.SiteTwoLevel] = p.auth.SiteTwo
-	p.sites[p.auth.SiteThreeLevel] = p.auth.SiteThree
-
-	return nil
-}
-
-// Validate implements caddy.Validator.
-func (p Proxy) Validate() error {
-	if p.auth.CookieName == "" {
-		return fmt.Errorf("missing `AUTH_COOKIE_NAME`")
-	}
-
-	if p.auth.TokenSecret == "" {
-		return fmt.Errorf("missing `AUTH_TOKEN_SECRET`")
-	}
-
-	if len(p.sites) == 0 {
-		return fmt.Errorf("missing `AUTH_URLS`")
-	}
-
-	return nil
-}
-
-// UnmarshalCaddyfile implements caddyfile.Unmarshaler.
-func (p *Proxy) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	d.NextArg()
-
-	for d.NextBlock(0) {
-		switch d.Val() {
-		default:
-			return fmt.Errorf("unknown option `%s` in `dynamic_proxy`", d.Val())
-		}
-	}
-
 	return nil
 }
 
@@ -133,10 +72,10 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 
 func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	// if no cookie, redirect to get new cookie
-	cookie, err := r.Cookie(p.auth.CookieName)
+	cookie, err := r.Cookie(p.cookieName)
 	if err != nil {
 		p.log.Info("no jwt exists, calling management api")
-		return p.auth.ManagementAPI, nil
+		return p.managementAPI, nil
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -144,11 +83,11 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return []byte(p.auth.TokenSecret), nil
+		return []byte(p.tokenSecret), nil
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
-		return p.auth.ManagementAPI, nil
+		return p.managementAPI, nil
 	} else if err != nil {
 		return "", err
 	}
@@ -161,8 +100,21 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	return result, nil
 }
 
-func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+func newDynamicProxy(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+	return newProxy()
+}
+
+func newProxy() (Proxy, error) {
 	var p Proxy
-	err := p.UnmarshalCaddyfile(h.Dispenser)
+	if err := envconfig.Process("", &p); err != nil {
+		return p, err
+	}
+
+	secret, err := base64.StdEncoding.DecodeString(p.tokenSecret)
+	if err != nil {
+		return p, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
+	}
+	p.tokenSecret = string(secret)
+
 	return p, err
 }
