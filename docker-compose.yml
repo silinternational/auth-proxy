@@ -1,0 +1,61 @@
+version: "3.7"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "53060:80"
+      - "53061:443"
+      - "53062:2019"
+    env_file: local.env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    command: caddy run
+
+  testapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: test.env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    command: caddy run
+
+  test:
+    image: golang:1.18
+    env_file: test.env
+    volumes:
+      - .:/src
+    working_dir: /src
+    depends_on:
+      - testapp
+      - fakemanagementapi
+      - server1
+      - server2
+      - server3
+
+  fakemanagementapi:
+    image: caddy:latest
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
+
+  server1:
+    image: caddy:latest
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
+
+  server2:
+    image: caddy:latest
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
+
+  server3:
+    image: caddy:latest
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
