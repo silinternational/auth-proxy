@@ -6,8 +6,8 @@
 	encode zstd gzip
 	dynamic_proxy
 
-	@redirect expression {vars.upstream} == {$MANAGEMENT_API}
-	@reverseproxy expression {vars.upstream} != {$MANAGEMENT_API}
+	@redirect expression {vars.upstream} == "{$MANAGEMENT_API}"
+	@reverseproxy expression {vars.upstream} != "{$MANAGEMENT_API}"
 
 	redir @redirect "{$MANAGEMENT_API}?returnTo={uri}"
 	reverse_proxy @reverseproxy {vars.upstream}
