@@ -66,7 +66,7 @@ func sendRequest(url string, c *http.Cookie) error {
 }
 
 func weSendARequestWithValidAuthorizationDataAuthorizingAccess(level string) error {
-	c := makeTestJWTCookie(p.cookieName, p.tokenSecret, level, time.Now().AddDate(0, 0, 1))
+	c := makeTestJWTCookie(p.CookieName, p.TokenSecret, level, time.Now().AddDate(0, 0, 1))
 	return sendRequest(testURL, c)
 }
 
@@ -74,9 +74,9 @@ func weSendARequestWithAuthorizationData(t string) error {
 	var c *http.Cookie
 	switch t {
 	case "expired":
-		c = makeTestJWTCookie(p.cookieName, p.tokenSecret, "level", time.Now().AddDate(0, 0, -1))
+		c = makeTestJWTCookie(p.CookieName, p.TokenSecret, "level", time.Now().AddDate(0, 0, -1))
 	case "invalid":
-		c = makeTestJWTCookie(p.cookieName, "bad", "level", time.Now().AddDate(0, 0, 1))
+		c = makeTestJWTCookie(p.CookieName, "bad", "level", time.Now().AddDate(0, 0, 1))
 	case "no":
 		c = nil
 	default:
@@ -96,7 +96,7 @@ func weWillBeRedirectedToTheManagementApi() error {
 		return err
 	}
 
-	return assertEqual(p.managementAPI, loc.String())
+	return assertEqual(p.ManagementAPI, loc.String())
 }
 
 func weDoNotSeeAnErrorMessage() error {
@@ -109,7 +109,7 @@ func weWillSeeAnErrorMessage() error {
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest("http://"+p.sites[level], nil); err != nil {
+	if err := sendRequest("http://"+p.Sites[level], nil); err != nil {
 		return err
 	}
 
