@@ -89,7 +89,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 		p.log.Info("jwt has expired")
 		return p.ManagementAPI, nil
 	} else if err != nil {
-		return "", err
+		return "", fmt.Errorf("authRedirect failed to parse token: %w", err)
 	}
 
 	result, ok := p.Sites[p.claim.Level]
