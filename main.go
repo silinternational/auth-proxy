@@ -31,10 +31,10 @@ type ProxyClaim struct {
 }
 
 type Proxy struct {
-	cookieName    string    `required:"true" split_words:"true"`
-	tokenSecret   string    `required:"true" split_words:"true"`
-	sites         AuthSites `required:"true" split_words:"true"`
-	managementAPI string    `required:"true" split_words:"true"`
+	CookieName    string    `required:"true" split_words:"true"`
+	TokenSecret   string    `required:"true" split_words:"true"`
+	Sites         AuthSites `required:"true" split_words:"true"`
+	ManagementAPI string    `required:"true" split_words:"true"`
 
 	claim ProxyClaim  `ignored:"true"`
 	log   *zap.Logger `ignored:"true"`
@@ -72,10 +72,10 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 
 func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	// if no cookie, redirect to get new cookie
-	cookie, err := r.Cookie(p.cookieName)
+	cookie, err := r.Cookie(p.CookieName)
 	if err != nil {
 		p.log.Info("no jwt exists, calling management api")
-		return p.managementAPI, nil
+		return p.ManagementAPI, nil
 	}
 
 	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -83,16 +83,16 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return []byte(p.tokenSecret), nil
+		return []byte(p.TokenSecret), nil
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
-		return p.managementAPI, nil
+		return p.ManagementAPI, nil
 	} else if err != nil {
-		return "", err
+		return "", fmt.Errorf("authRedirect failed to parse token: %w", err)
 	}
 
-	result, ok := p.sites[p.claim.Level]
+	result, ok := p.Sites[p.claim.Level]
 	if !ok {
 		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
 	}
@@ -110,11 +110,11 @@ func newProxy() (Proxy, error) {
 		return p, err
 	}
 
-	secret, err := base64.StdEncoding.DecodeString(p.tokenSecret)
+	secret, err := base64.StdEncoding.DecodeString(p.TokenSecret)
 	if err != nil {
 		return p, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
 	}
-	p.tokenSecret = string(secret)
+	p.TokenSecret = string(secret)
 
 	return p, err
 }

@@ -20,9 +20,9 @@ func Test_AuthProxy(t *testing.T) {
 	validTime := time.Now().AddDate(0, 0, 1)
 	expiredTime := time.Now().AddDate(0, 0, -1)
 	proxy := Proxy{
-		cookieName:  cookieName,
-		tokenSecret: tokenSecret,
-		sites:       authURLs,
+		CookieName:  cookieName,
+		TokenSecret: tokenSecret,
+		Sites:       authURLs,
 		log:         zap.L(),
 	}
 
