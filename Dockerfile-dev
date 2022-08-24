@@ -1,0 +1,8 @@
+FROM caddy:builder
+
+WORKDIR /app
+COPY . .
+
+COPY --from=cosmtrek/air /go/bin/air /go/bin/
+
+CMD air

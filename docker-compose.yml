@@ -4,15 +4,14 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-dev
     ports:
       - "53060:80"
       - "53061:443"
       - "53062:2019"
     env_file: local.env
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-    command: caddy run
+      - ./:/app
 
   testapp:
     build:
