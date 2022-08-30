@@ -72,7 +72,8 @@ func Test_AuthProxy(t *testing.T) {
 				r.AddCookie(tc.cookie)
 			}
 
-			to, err := proxy.authRedirect(r)
+			var w httptest.ResponseRecorder
+			to, err := proxy.authRedirect(&w, r)
 			if tc.wantErr {
 				assert.ErrorContains(err, tc.want)
 			} else {

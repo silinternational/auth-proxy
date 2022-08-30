@@ -65,7 +65,7 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	to, err := p.authRedirect(r)
+	to, err := p.authRedirect(w, r)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(r *http.Request) (string, error) {
+func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, error) {
 	token := p.getToken(r)
 
 	if token == "" {
@@ -101,6 +101,13 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	} else if err != nil {
 		return "", fmt.Errorf("authRedirect failed to parse token: %w", err)
 	}
+
+	ck := http.Cookie{
+		Name:    p.CookieName,
+		Value:   token,
+		Expires: p.claim.ExpiresAt.Time,
+	}
+	http.SetCookie(w, &ck)
 
 	result, ok := p.Sites[p.claim.Level]
 	if !ok {
