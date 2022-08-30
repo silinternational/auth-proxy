@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
@@ -75,6 +77,11 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 	cookie, err := r.Cookie(p.CookieName)
 	if err != nil {
 		p.log.Info("no jwt exists, calling management api")
+
+		returnTo := url.QueryEscape(os.Getenv("HOST") + r.URL.Path)
+		caddyhttp.SetVar(r.Context(), "returnTo", returnTo)
+		p.log.Info("setting returnTo to " + returnTo)
+
 		return p.ManagementAPI, nil
 	}
 

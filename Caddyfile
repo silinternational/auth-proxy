@@ -9,6 +9,6 @@
 	@management_api expression {vars.upstream} == "{$MANAGEMENT_API}"
 	@static_site expression {vars.upstream} != "{$MANAGEMENT_API}"
 
-	redir @management_api "{$MANAGEMENT_API}?returnTo={uri}"
+	redir @management_api "{$MANAGEMENT_API}?returnTo={vars.returnTo}"
 	reverse_proxy @static_site {vars.upstream}
 }
