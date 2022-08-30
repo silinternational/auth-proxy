@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
@@ -33,6 +32,7 @@ type ProxyClaim struct {
 }
 
 type Proxy struct {
+	Host          string    `required:"true"`
 	CookieName    string    `required:"true" split_words:"true"`
 	TokenSecret   string    `required:"true" split_words:"true"`
 	Sites         AuthSites `required:"true" split_words:"true"`
@@ -81,7 +81,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 	if token == "" {
 		p.log.Info("no token found, calling management api!")
 
-		returnTo := url.QueryEscape(os.Getenv("HOST") + r.URL.Path)
+		returnTo := url.QueryEscape(p.Host + r.URL.Path)
 		caddyhttp.SetVar(r.Context(), "returnTo", returnTo)
 		p.log.Info("setting returnTo to " + returnTo)
 
