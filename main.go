@@ -76,10 +76,10 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 }
 
 func (p Proxy) authRedirect(r *http.Request) (string, error) {
-	// if no cookie, redirect to get new cookie
-	cookie, err := r.Cookie(p.CookieName)
-	if err != nil {
-		p.log.Info("no jwt exists, calling management api")
+	token := p.getToken(r)
+
+	if token == "" {
+		p.log.Info("no token found, calling management api!")
 
 		returnTo := url.QueryEscape(os.Getenv("HOST") + r.URL.Path)
 		caddyhttp.SetVar(r.Context(), "returnTo", returnTo)
@@ -88,7 +88,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 		return p.ManagementAPI, nil
 	}
 
-	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -126,4 +126,13 @@ func newProxy() (Proxy, error) {
 		return p, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
 	}
 	return p, nil
+}
+
+// getToken returns a token found in either a cookie or the query string
+func (p Proxy) getToken(r *http.Request) string {
+	cookie, err := r.Cookie(p.CookieName)
+	if err == nil {
+		return cookie.Value
+	}
+	return r.URL.Query().Get("setToken")
 }
