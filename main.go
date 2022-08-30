@@ -33,10 +33,13 @@ type ProxyClaim struct {
 
 type Proxy struct {
 	Host          string    `required:"true"`
-	CookieName    string    `required:"true" split_words:"true"`
 	TokenSecret   string    `required:"true" split_words:"true"`
 	Sites         AuthSites `required:"true" split_words:"true"`
 	ManagementAPI string    `required:"true" split_words:"true"`
+
+	// optional params
+	CookieName     string `default:"_auth_proxy" split_words:"true"`
+	TokenParameter string `default:"token" split_words:"true"`
 
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
@@ -141,5 +144,5 @@ func (p Proxy) getToken(r *http.Request) string {
 	if err == nil {
 		return cookie.Value
 	}
-	return r.URL.Query().Get("setToken")
+	return r.URL.Query().Get(p.TokenParameter)
 }
