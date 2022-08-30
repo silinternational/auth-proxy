@@ -111,7 +111,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 
 	result, ok := p.Sites[p.claim.Level]
 	if !ok {
-		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
+		return "", fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites)
 	}
 
 	return result, nil
