@@ -38,6 +38,9 @@ type Proxy struct {
 	Sites         AuthSites `required:"true" split_words:"true"`
 	ManagementAPI string    `required:"true" split_words:"true"`
 
+	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
+	Secret []byte `ignored:"true"`
+
 	claim ProxyClaim  `ignored:"true"`
 	log   *zap.Logger `ignored:"true"`
 }
@@ -90,7 +93,7 @@ func (p Proxy) authRedirect(r *http.Request) (string, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return []byte(p.TokenSecret), nil
+		return p.Secret, nil
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
@@ -117,11 +120,10 @@ func newProxy() (Proxy, error) {
 		return p, err
 	}
 
-	secret, err := base64.StdEncoding.DecodeString(p.TokenSecret)
+	var err error
+	p.Secret, err = base64.StdEncoding.DecodeString(p.TokenSecret)
 	if err != nil {
 		return p, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
 	}
-	p.TokenSecret = string(secret)
-
-	return p, err
+	return p, nil
 }
