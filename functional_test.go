@@ -37,7 +37,7 @@ func Test_Functional(t *testing.T) {
 		ScenarioInitializer: InitializeScenario,
 	}.Run()
 
-	assert.Equal(t, 0, status)
+	assert.Equal(t, 0, status, "One or more functional tests failed.")
 }
 
 func sendRequest(url string, c *http.Cookie) error {
@@ -86,7 +86,8 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	err := assertEqual(http.StatusTemporaryRedirect, last.response.StatusCode)
+	err := assertEqual(http.StatusTemporaryRedirect, last.response.StatusCode,
+		"response: %s", last.body)
 	if err != nil {
 		return err
 	}
