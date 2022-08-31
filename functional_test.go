@@ -37,7 +37,7 @@ func Test_Functional(t *testing.T) {
 		ScenarioInitializer: InitializeScenario,
 	}.Run()
 
-	assert.Equal(t, 0, status)
+	assert.Equal(t, 0, status, "One or more functional tests failed.")
 }
 
 func sendRequest(url string, c *http.Cookie) error {
@@ -66,7 +66,7 @@ func sendRequest(url string, c *http.Cookie) error {
 }
 
 func weSendARequestWithValidAuthorizationDataAuthorizingAccess(level string) error {
-	c := makeTestJWTCookie(p.CookieName, p.TokenSecret, level, time.Now().AddDate(0, 0, 1))
+	c := makeTestJWTCookie(p.CookieName, p.Secret, level, time.Now().AddDate(0, 0, 1))
 	return sendRequest(testURL, c)
 }
 
@@ -74,9 +74,9 @@ func weSendARequestWithAuthorizationData(t string) error {
 	var c *http.Cookie
 	switch t {
 	case "expired":
-		c = makeTestJWTCookie(p.CookieName, p.TokenSecret, "level", time.Now().AddDate(0, 0, -1))
+		c = makeTestJWTCookie(p.CookieName, p.Secret, "level", time.Now().AddDate(0, 0, -1))
 	case "invalid":
-		c = makeTestJWTCookie(p.CookieName, "bad", "level", time.Now().AddDate(0, 0, 1))
+		c = makeTestJWTCookie(p.CookieName, []byte("bad"), "level", time.Now().AddDate(0, 0, 1))
 	case "no":
 		c = nil
 	default:
@@ -86,7 +86,8 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	err := assertEqual(http.StatusTemporaryRedirect, last.response.StatusCode)
+	err := assertEqual(http.StatusTemporaryRedirect, last.response.StatusCode,
+		"response: %s", last.body)
 	if err != nil {
 		return err
 	}

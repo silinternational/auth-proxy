@@ -14,16 +14,16 @@ import (
 func Test_AuthProxy(t *testing.T) {
 	assert := assert.New(t)
 	cookieName := "_test"
-	tokenSecret := "secret"
+	tokenSecret := []byte("secret")
 	managementAPI := "management_api"
 	authURLs := AuthSites{"good": "good url"}
 	validTime := time.Now().AddDate(0, 0, 1)
 	expiredTime := time.Now().AddDate(0, 0, -1)
 	proxy := Proxy{
-		CookieName:  cookieName,
-		TokenSecret: tokenSecret,
-		Sites:       authURLs,
-		log:         zap.L(),
+		CookieName: cookieName,
+		Secret:     tokenSecret,
+		Sites:      authURLs,
+		log:        zap.L(),
 	}
 
 	tests := []struct {
@@ -40,7 +40,7 @@ func Test_AuthProxy(t *testing.T) {
 		},
 		{
 			name:    "invalid cookie",
-			cookie:  makeTestJWTCookie(cookieName, "bad", "good", validTime),
+			cookie:  makeTestJWTCookie(cookieName, []byte("bad"), "good", validTime),
 			wantErr: true,
 			want:    "signature is invalid",
 		},
@@ -72,7 +72,8 @@ func Test_AuthProxy(t *testing.T) {
 				r.AddCookie(tc.cookie)
 			}
 
-			to, err := proxy.authRedirect(r)
+			var w httptest.ResponseRecorder
+			to, err := proxy.authRedirect(&w, r)
 			if tc.wantErr {
 				assert.ErrorContains(err, tc.want)
 			} else {
@@ -83,7 +84,7 @@ func Test_AuthProxy(t *testing.T) {
 	}
 }
 
-func makeTestJWTCookie(name, secret, level string, expires time.Time) *http.Cookie {
+func makeTestJWTCookie(name string, secret []byte, level string, expires time.Time) *http.Cookie {
 	claim := ProxyClaim{
 		Level: level,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -92,7 +93,7 @@ func makeTestJWTCookie(name, secret, level string, expires time.Time) *http.Cook
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
-	tokenString, _ := token.SignedString([]byte(secret))
+	tokenString, _ := token.SignedString(secret)
 
 	return &http.Cookie{
 		Name:  name,
