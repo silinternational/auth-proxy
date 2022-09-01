@@ -1,6 +1,6 @@
 FROM caddy:builder as builder
 COPY . .
-RUN xcaddy build --with github.com/silinternational/auth-proxy
+RUN xcaddy build --with github.com/silinternational/auth-proxy=./
 
 FROM caddy:latest
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
