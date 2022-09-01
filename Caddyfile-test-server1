@@ -1,0 +1,2 @@
+:80
+respond "server1 -- {$HOSTNAME} {uri}"

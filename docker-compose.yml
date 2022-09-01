@@ -38,23 +38,23 @@ services:
   fakemanagementapi:
     image: caddy:latest
     volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
+      - ./Caddyfile-test-api:/srv/Caddyfile
     command: caddy run
 
   server1:
     image: caddy:latest
     volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
+      - ./Caddyfile-test-server1:/srv/Caddyfile
     command: caddy run
 
   server2:
     image: caddy:latest
     volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
+      - ./Caddyfile-test-server2:/srv/Caddyfile
     command: caddy run
 
   server3:
     image: caddy:latest
     volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
+      - ./Caddyfile-test-server3:/srv/Caddyfile
     command: caddy run
