@@ -19,7 +19,6 @@ services:
       dockerfile: Dockerfile
     env_file: test.env
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
     command: caddy run
 
   test:
@@ -37,24 +36,32 @@ services:
 
   fakemanagementapi:
     image: caddy:latest
+    environment:
+      SERVER: API
     volumes:
-      - ./Caddyfile-test-api:/srv/Caddyfile
+      - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server1:
     image: caddy:latest
+    environment:
+      SERVER: server1
     volumes:
-      - ./Caddyfile-test-server1:/srv/Caddyfile
+      - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server2:
     image: caddy:latest
+    environment:
+      SERVER: server2
     volumes:
-      - ./Caddyfile-test-server2:/srv/Caddyfile
+      - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server3:
     image: caddy:latest
+    environment:
+      SERVER: server3
     volumes:
-      - ./Caddyfile-test-server3:/srv/Caddyfile
+      - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
