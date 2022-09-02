@@ -86,10 +86,8 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	if err := assertEqual("API -- ", last.body[:7]); err != nil {
-		return fmt.Errorf(`did not see "API --" in the response body: %s`, last.body)
-	}
-	return nil
+	return assertEqual("API-- ", last.body[:7],
+		`did not see "API --" in the response body: %s`, last.body)
 }
 
 func weDoNotSeeAnErrorMessage() error {
@@ -97,10 +95,8 @@ func weDoNotSeeAnErrorMessage() error {
 }
 
 func weWillSeeAnErrorMessage() error {
-	if err := assertEqual(http.StatusInternalServerError, last.response.StatusCode); err != nil {
-		return fmt.Errorf("expected a 500, --%s-- got a %d, body: %s", p.Host, last.response.StatusCode, last.body)
-	}
-	return nil
+	return assertEqual(http.StatusInternalServerError, last.response.StatusCode,
+		"expected a 500, --%s-- got a %d, body: %s", p.Host, last.response.StatusCode, last.body)
 }
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
