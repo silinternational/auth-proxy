@@ -16,10 +16,12 @@ services:
   testapp:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-dev
+    ports:
+      - "53063:80"
     env_file: test.env
     volumes:
-    command: caddy run
+      - ./:/app
 
   test:
     image: golang:1.18
