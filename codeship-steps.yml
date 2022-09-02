@@ -1,6 +1,6 @@
 - name: test
   service: test
-  command: go install "github.com/cucumber/godog/cmd/godog@latest" && go test
+  command: /src/run-tests.sh
 
 - name: push_develop
   service: testapp

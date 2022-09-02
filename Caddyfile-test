@@ -1,2 +1,2 @@
 :80
-respond "{$HOSTNAME} {uri}"
+respond "{$SERVER} -- {$HOSTNAME} {uri}"
