@@ -23,8 +23,6 @@ var (
 	client = http.DefaultClient
 )
 
-const testURL = "http://testapp"
-
 func Test_Functional(t *testing.T) {
 	// setup
 	var err error
@@ -67,7 +65,7 @@ func sendRequest(url string, c *http.Cookie) error {
 
 func weSendARequestWithValidAuthorizationDataAuthorizingAccess(level string) error {
 	c := makeTestJWTCookie(p.CookieName, p.Secret, level, time.Now().AddDate(0, 0, 1))
-	return sendRequest(testURL, c)
+	return sendRequest(p.Host, c)
 }
 
 func weSendARequestWithAuthorizationData(t string) error {
@@ -82,7 +80,7 @@ func weSendARequestWithAuthorizationData(t string) error {
 	default:
 		return godog.ErrPending
 	}
-	return sendRequest(testURL, c)
+	return sendRequest(p.Host, c)
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
