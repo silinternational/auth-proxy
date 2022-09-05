@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
@@ -38,8 +39,10 @@ type Proxy struct {
 	ManagementAPI string    `required:"true" split_words:"true"`
 
 	// optional params
-	CookieName     string `default:"_auth_proxy" split_words:"true"`
-	TokenParameter string `default:"token" split_words:"true"`
+	CookieName    string `default:"_auth_proxy" split_words:"true"`
+	ReturnToParam string `default:"returnTo" split_words:"true"`
+	TokenParam    string `default:"token" split_words:"true"`
+	TokenPath     string `default:"/auth/token" split_words:"true"`
 
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
@@ -82,13 +85,13 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 	token := p.getToken(r)
 
 	if token == "" {
-		p.log.Info("no token found, calling management api!")
+		p.log.Info("no token found, calling management api")
 
 		returnTo := url.QueryEscape(p.Host + r.URL.Path)
 		caddyhttp.SetVar(r.Context(), "returnTo", returnTo)
 		p.log.Info("setting returnTo to " + returnTo)
 
-		return p.ManagementAPI, nil
+		return p.ManagementAPI + p.TokenPath, nil
 	}
 
 	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -117,6 +120,11 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 		return "", fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites)
 	}
 
+	returnTo := r.URL.Query().Get(p.ReturnToParam)
+	if returnTo != "" && strings.HasPrefix(returnTo, p.ManagementAPI) {
+		p.log.Info("redirecting back to the management API")
+		return returnTo, nil
+	}
 	return result, nil
 }
 
@@ -144,5 +152,5 @@ func (p Proxy) getToken(r *http.Request) string {
 	if err == nil {
 		return cookie.Value
 	}
-	return r.URL.Query().Get(p.TokenParameter)
+	return r.URL.Query().Get(p.TokenParam)
 }
