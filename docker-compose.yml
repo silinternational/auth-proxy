@@ -12,6 +12,8 @@ services:
     env_file: local.env
     volumes:
       - ./:/app
+      - go-build:/root/.cache/go-build
+      - go-mod:/go/pkg/mod
 
   testapp:
     build:
@@ -67,3 +69,7 @@ services:
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
+
+volumes:
+  go-build: {}
+  go-mod: {}
