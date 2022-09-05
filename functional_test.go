@@ -24,15 +24,11 @@ var (
 )
 
 func Test_Functional(t *testing.T) {
-	// setup
-	var err error
-	p, err = newProxy()
-	assert.NoError(t, err)
-
 	// run functional tests
 	status := godog.TestSuite{
-		Name:                "functional tests",
-		ScenarioInitializer: InitializeScenario,
+		Name:                 "functional tests",
+		ScenarioInitializer:  InitializeScenario,
+		TestSuiteInitializer: InitializeTestSuite,
 	}.Run()
 
 	assert.Equal(t, 0, status, "One or more functional tests failed.")
@@ -104,6 +100,15 @@ func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	}
 
 	return assertEqual(last.body, proxy.body)
+}
+
+func InitializeTestSuite(ctx *godog.TestSuiteContext) {
+	ctx.BeforeSuite(func() {
+		var err error
+		if p, err = newProxy(); err != nil {
+			panic(err.Error())
+		}
+	})
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
