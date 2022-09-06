@@ -23,18 +23,12 @@ var (
 	client = http.DefaultClient
 )
 
-const testURL = "http://testapp"
-
 func Test_Functional(t *testing.T) {
-	// setup
-	var err error
-	p, err = newProxy()
-	assert.NoError(t, err)
-
 	// run functional tests
 	status := godog.TestSuite{
-		Name:                "functional tests",
-		ScenarioInitializer: InitializeScenario,
+		Name:                 "functional tests",
+		ScenarioInitializer:  InitializeScenario,
+		TestSuiteInitializer: InitializeTestSuite,
 	}.Run()
 
 	assert.Equal(t, 0, status, "One or more functional tests failed.")
@@ -67,7 +61,7 @@ func sendRequest(url string, c *http.Cookie) error {
 
 func weSendARequestWithValidAuthorizationDataAuthorizingAccess(level string) error {
 	c := makeTestJWTCookie(p.CookieName, p.Secret, level, time.Now().AddDate(0, 0, 1))
-	return sendRequest(testURL, c)
+	return sendRequest(p.Host, c)
 }
 
 func weSendARequestWithAuthorizationData(t string) error {
@@ -82,7 +76,7 @@ func weSendARequestWithAuthorizationData(t string) error {
 	default:
 		return godog.ErrPending
 	}
-	return sendRequest(testURL, c)
+	return sendRequest(p.Host, c)
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
@@ -106,6 +100,15 @@ func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	}
 
 	return assertEqual(last.body, proxy.body)
+}
+
+func InitializeTestSuite(ctx *godog.TestSuiteContext) {
+	ctx.BeforeSuite(func() {
+		var err error
+		if p, err = newProxy(); err != nil {
+			panic(err.Error())
+		}
+	})
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
