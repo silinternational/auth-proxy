@@ -7,8 +7,12 @@
 	dynamic_proxy
 
 	@management_api expression {vars.upstream}.startsWith('{$MANAGEMENT_API}')
-	@static_site expression {vars.upstream} != "{$MANAGEMENT_API}"
+	@static_site expression !{vars.upstream}.startsWith('{$MANAGEMENT_API}"')
 
-	redir @management_api "{$MANAGEMENT_API}?returnTo={vars.returnTo}"
+	# redirect to the management api with a returnTo parameter
+	redir @management_api "{vars.upstream}?returnTo={vars.returnTo}"
+
+	# remove query string and proxy to upstream specified in vars.upstream
+	rewrite @static_site {path}?
 	reverse_proxy @static_site {vars.upstream}
 }
