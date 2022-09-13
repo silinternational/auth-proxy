@@ -71,6 +71,11 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
+	if r.URL.Path == "/status" {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	}
+
 	to, err := p.authRedirect(w, r)
 	if err != nil {
 		return err
