@@ -1,2 +1,5 @@
 :80
-respond "{$SERVER} -- {$HOSTNAME} {uri}"
+respond 200 {
+	body "{$SERVER} -- {$HOSTNAME} {uri}
+			host: {host}"
+}

@@ -14,5 +14,7 @@
 
 	# remove query string and proxy to upstream specified in vars.upstream
 	rewrite @static_site {path}?
-	reverse_proxy @static_site {vars.upstream}
+	reverse_proxy @static_site {vars.upstream} {
+		header_up Host {vars.upstream}
+	}
 }
