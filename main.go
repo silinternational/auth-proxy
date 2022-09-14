@@ -117,6 +117,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 		Name:    p.CookieName,
 		Value:   token,
 		Expires: p.claim.ExpiresAt.Time,
+		Path:    "/",
 	}
 	http.SetCookie(w, &ck)
 
