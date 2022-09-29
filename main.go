@@ -89,6 +89,10 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, error) {
 	token := p.getToken(r)
 
+	q := r.URL.Query()
+	q.Del(p.TokenParam)
+	r.URL.RawQuery = q.Encode()
+
 	if token == "" {
 		p.log.Info("no token found, calling management api")
 
