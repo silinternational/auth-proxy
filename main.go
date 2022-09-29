@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,7 +13,6 @@ import (
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
