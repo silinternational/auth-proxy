@@ -112,7 +112,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
-		return p.ManagementAPI, nil
+		return p.ManagementAPI + p.TokenPath, nil
 	} else if err != nil {
 		return "", fmt.Errorf("authRedirect failed to parse token: %w", err)
 	}
