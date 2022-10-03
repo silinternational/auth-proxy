@@ -82,6 +82,16 @@ func Test_AuthProxy(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("remove token param", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/?"+proxy.TokenParam+"=abc123", nil)
+		r.AddCookie(makeTestJWTCookie(cookieName, tokenSecret, "good", validTime))
+
+		var w httptest.ResponseRecorder
+		proxy.authRedirect(&w, r)
+
+		assert.False(r.URL.Query().Has(proxy.TokenParam))
+	})
 }
 
 func makeTestJWTCookie(name string, secret []byte, level string, expires time.Time) *http.Cookie {

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,7 +13,6 @@ import (
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -89,6 +89,10 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, error) {
 	token := p.getToken(r)
 
+	q := r.URL.Query()
+	q.Del(p.TokenParam)
+	r.URL.RawQuery = q.Encode()
+
 	if token == "" {
 		p.log.Info("no token found, calling management api")
 
@@ -108,7 +112,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired")
-		return p.ManagementAPI, nil
+		return p.ManagementAPI + p.TokenPath, nil
 	} else if err != nil {
 		return "", fmt.Errorf("authRedirect failed to parse token: %w", err)
 	}
