@@ -158,9 +158,11 @@ func newProxy() (Proxy, error) {
 
 // getToken returns a token found in either a cookie or the query string
 func (p Proxy) getToken(r *http.Request) string {
-	cookie, err := r.Cookie(p.CookieName)
-	if err == nil {
+	if token := r.URL.Query().Get(p.TokenParam); token != "" {
+		return token
+	}
+	if cookie, err := r.Cookie(p.CookieName); err == nil {
 		return cookie.Value
 	}
-	return r.URL.Query().Get(p.TokenParam)
+	return ""
 }
