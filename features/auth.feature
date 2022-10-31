@@ -16,6 +16,7 @@ Feature: functional test cases
 	Scenario Outline: Authorization data specifying various levels of access
 		When we send a request with valid authorization data authorizing <accessLevel> access
 		Then we do not see an error message
+		And we do not see the token parameter
 		And we will see the <accessLevel> version of the website
 
 		Examples:
