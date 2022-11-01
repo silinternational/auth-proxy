@@ -102,6 +102,11 @@ func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	return assertEqual(last.body, proxy.body)
 }
 
+func weDoNotSeeTheTokenParameter() error {
+	token := last.response.Request.URL.Query().Get(p.TokenParam)
+	return assertEqual("", token)
+}
+
 func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	ctx.BeforeSuite(func() {
 		var err error
@@ -118,6 +123,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^we do not see an error message$`, weDoNotSeeAnErrorMessage)
 	ctx.Step(`^we will see an error message$`, weWillSeeAnErrorMessage)
 	ctx.Step(`^we will see the (\w+) version of the website$`, weWillSeeTheAccessLevelVersionOfTheWebsite)
+	ctx.Step(`^we do not see the token parameter$`, weDoNotSeeTheTokenParameter)
 }
 
 // Helper functions
