@@ -13,7 +13,6 @@ import (
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/kelseyhightower/envconfig"
-	"go.uber.org/zap"
 )
 
 // Interface guards
@@ -40,15 +39,17 @@ type Proxy struct {
 
 	// optional params
 	CookieName    string `default:"_auth_proxy" split_words:"true"`
+	Environment   string `default:"production"`
 	ReturnToParam string `default:"returnTo" split_words:"true"`
+	RollbarToken  string `split_words:"true"`
 	TokenParam    string `default:"token" split_words:"true"`
 	TokenPath     string `default:"/auth/token" split_words:"true"`
 
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
 
-	claim ProxyClaim  `ignored:"true"`
-	log   *zap.Logger `ignored:"true"`
+	claim ProxyClaim `ignored:"true"`
+	log   *Logger    `ignored:"true"`
 }
 
 func (Proxy) CaddyModule() caddy.ModuleInfo {
@@ -59,7 +60,7 @@ func (Proxy) CaddyModule() caddy.ModuleInfo {
 }
 
 func (p *Proxy) Provision(ctx caddy.Context) error {
-	p.log = ctx.Logger(p)
+	p.log = logger(p.Environment, ctx.Logger(p), p.RollbarToken)
 	return nil
 }
 
