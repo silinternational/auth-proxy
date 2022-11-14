@@ -2,7 +2,7 @@
 	order dynamic_proxy first
 }
 
-:80 {
+:80, :443 {
 	encode zstd gzip
 	dynamic_proxy
 
