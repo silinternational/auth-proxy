@@ -80,8 +80,7 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 	if err != nil {
 		return err
 	}
-	caddyhttp.SetVar(r.Context(), "upstream", to)
-	p.log.Info("setting upstream to " + to)
+	p.setVar(r, "upstream", to)
 
 	return next.ServeHTTP(w, r)
 }
@@ -91,11 +90,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 
 	if token == "" {
 		p.log.Info("no token found, calling management api")
-
-		returnTo := url.QueryEscape(p.Host + r.URL.Path)
-		caddyhttp.SetVar(r.Context(), "returnTo", returnTo)
-		p.log.Info("setting returnTo to " + returnTo)
-
+		p.setVar(r, "returnTo", url.QueryEscape(p.Host+r.URL.Path))
 		return p.ManagementAPI + p.TokenPath, nil
 	}
 
@@ -107,7 +102,8 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 		return p.Secret, nil
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
-		p.log.Info("jwt has expired")
+		p.log.Info("jwt has expired, calling management api")
+		p.setVar(r, "returnTo", url.QueryEscape(p.Host+r.URL.Path))
 		return p.ManagementAPI + p.TokenPath, nil
 	} else if err != nil {
 		return "", fmt.Errorf("authRedirect failed to parse token: %w", err)
@@ -132,6 +128,11 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 		return returnTo, nil
 	}
 	return result, nil
+}
+
+func (p Proxy) setVar(r *http.Request, name, value string) {
+	caddyhttp.SetVar(r.Context(), name, value)
+	p.log.Info("setting " + name + " to " + value)
 }
 
 func newDynamicProxy(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
