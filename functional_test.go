@@ -80,8 +80,8 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	return assertEqual("API -- ", last.body[:7],
-		`did not see "API --" in the response body: %s`, last.body)
+	return assertEqual("<title>API</title>", last.body[:7],
+		`did not see "API" in the response body: %s`, last.body)
 }
 
 func weDoNotSeeAnErrorMessage() error {
