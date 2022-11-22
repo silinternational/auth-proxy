@@ -2,6 +2,8 @@ testapp:
   build:
     context: .
     dockerfile: Dockerfile
+  cached: true
+  default_cache_branch: "develop"
   env_file: test.env
   command: caddy run
 

@@ -1,5 +1,15 @@
 :80
 respond 200 {
-	body "{$SERVER} -- {$HOSTNAME} {uri}
-			host: {host}"
+	body "<!DOCTYPE html>
+		<html>
+			<head>
+				<title>{$SERVER}</title>
+			</head>
+			<body>
+					<p><b>hostname:</b> {$HOSTNAME}</p>
+					<p><b>uri:</b> {uri}</p>
+					<p><b>host:</b> {host}<p>
+			</body>
+		</html>
+"
 }
