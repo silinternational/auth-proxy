@@ -156,7 +156,7 @@ func newProxy() (Proxy, error) {
 // getToken returns a token found in either a cookie or the query string
 func (p Proxy) getToken(r *http.Request) string {
 	if token := r.URL.Query().Get(p.TokenParam); token != "" {
-		// if we got the token from the address bar, set a flag for the Caddyfile to redirect without it
+		// if we got the token from the query string, set a flag for the Caddyfile to redirect without it
 		p.setVar(r, "clear_query", "true")
 		return token
 	}
