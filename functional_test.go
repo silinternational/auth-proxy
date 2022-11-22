@@ -80,7 +80,7 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	return assertContains(last.body[:7], "<title>API</title>",
+	return assertContains(last.body, "<title>API</title>",
 		`did not see "API" in the response body title: %s`, last.body)
 }
 
