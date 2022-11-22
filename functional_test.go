@@ -80,8 +80,8 @@ func weSendARequestWithAuthorizationData(t string) error {
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	return assertEqual("<title>API</title>", last.body[:7],
-		`did not see "API" in the response body: %s`, last.body)
+	return assertContains(last.body[:7], "<title>API</title>",
+		`did not see "API" in the response body title: %s`, last.body)
 }
 
 func weDoNotSeeAnErrorMessage() error {
@@ -139,5 +139,11 @@ func (a *asserter) Errorf(format string, args ...interface{}) {
 func assertEqual(expected, actual interface{}, msgAndArgs ...interface{}) error {
 	var a asserter
 	assert.Equal(&a, expected, actual, msgAndArgs...)
+	return a.err
+}
+
+func assertContains(s, contains interface{}, msgAndArgs ...interface{}) error {
+	var a asserter
+	assert.Contains(&a, s, contains, msgAndArgs...)
 	return a.err
 }
