@@ -25,8 +25,6 @@ var (
 )
 
 func Test_Functional(t *testing.T) {
-	client.Jar, _ = cookiejar.New(nil)
-
 	// run functional tests
 	status := godog.TestSuite{
 		Name:                 "functional tests",
@@ -34,7 +32,30 @@ func Test_Functional(t *testing.T) {
 		TestSuiteInitializer: InitializeTestSuite,
 	}.Run()
 
+	// Any test initialization should be done in Godog hooks, e.g.: InitializeTestSuite or InitializeScenario
+
 	assert.Equal(t, 0, status, "One or more functional tests failed.")
+}
+
+func InitializeTestSuite(ctx *godog.TestSuiteContext) {
+	ctx.BeforeSuite(func() {
+		var err error
+		if p, err = newProxy(); err != nil {
+			panic(err.Error())
+		}
+		client.Jar, _ = cookiejar.New(nil)
+	})
+}
+
+func InitializeScenario(ctx *godog.ScenarioContext) {
+	ctx.Step(`^we send a request with (\w+) authorization data$`, weSendARequestWithAuthorizationData)
+	ctx.Step(`^we send a request with authorization data in the (\w+) authorizing (\w+) access$`,
+		weSendARequestWithAuthorizationDataAuthorizingAccess)
+	ctx.Step(`^we will be redirected to the management api$`, weWillBeRedirectedToTheManagementApi)
+	ctx.Step(`^we do not see an error message$`, weDoNotSeeAnErrorMessage)
+	ctx.Step(`^we will see an error message$`, weWillSeeAnErrorMessage)
+	ctx.Step(`^we will see the (\w+) version of the website$`, weWillSeeTheAccessLevelVersionOfTheWebsite)
+	ctx.Step(`^we do not see the token parameter$`, weDoNotSeeTheTokenParameter)
 }
 
 func sendRequest(url string, c *http.Cookie) error {
@@ -118,26 +139,6 @@ func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 func weDoNotSeeTheTokenParameter() error {
 	token := last.response.Request.URL.Query().Get(p.TokenParam)
 	return assertEqual("", token)
-}
-
-func InitializeTestSuite(ctx *godog.TestSuiteContext) {
-	ctx.BeforeSuite(func() {
-		var err error
-		if p, err = newProxy(); err != nil {
-			panic(err.Error())
-		}
-	})
-}
-
-func InitializeScenario(ctx *godog.ScenarioContext) {
-	ctx.Step(`^we send a request with (\w+) authorization data$`, weSendARequestWithAuthorizationData)
-	ctx.Step(`^we send a request with authorization data in the (\w+) authorizing (\w+) access$`,
-		weSendARequestWithAuthorizationDataAuthorizingAccess)
-	ctx.Step(`^we will be redirected to the management api$`, weWillBeRedirectedToTheManagementApi)
-	ctx.Step(`^we do not see an error message$`, weDoNotSeeAnErrorMessage)
-	ctx.Step(`^we will see an error message$`, weWillSeeAnErrorMessage)
-	ctx.Step(`^we will see the (\w+) version of the website$`, weWillSeeTheAccessLevelVersionOfTheWebsite)
-	ctx.Step(`^we do not see the token parameter$`, weDoNotSeeTheTokenParameter)
 }
 
 // Helper functions
