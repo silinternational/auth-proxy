@@ -13,3 +13,6 @@ respond 200 {
 		</html>
 "
 }
+log {
+	output stdout
+}

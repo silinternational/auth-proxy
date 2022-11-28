@@ -8,7 +8,9 @@ testapp:
   command: caddy run
 
 test:
-  image: golang:1.18
+  build:
+    context: .
+    dockerfile: Dockerfile-test
   env_file: test.env
   volumes:
     - .:/src

@@ -40,25 +40,25 @@ func Test_AuthProxy(t *testing.T) {
 		},
 		{
 			name:    "invalid cookie",
-			cookie:  makeTestJWTCookie(cookieName, []byte("bad"), "good", validTime),
+			cookie:  makeTestJWTCookie(cookieName, makeTestJWT([]byte("bad"), "good", validTime)),
 			wantErr: true,
 			want:    "signature is invalid",
 		},
 		{
 			name:    "expired cookie",
-			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", expiredTime),
+			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", expiredTime)),
 			wantErr: false,
 			want:    managementAPI,
 		},
 		{
 			name:    "invalid level",
-			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "bad", validTime),
+			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "bad", validTime)),
 			wantErr: true,
 			want:    "unknown auth level",
 		},
 		{
 			name:    "valid",
-			cookie:  makeTestJWTCookie(cookieName, tokenSecret, "good", validTime),
+			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", validTime)),
 			wantErr: false,
 			want:    authURLs["good"],
 		},
@@ -84,7 +84,14 @@ func Test_AuthProxy(t *testing.T) {
 	}
 }
 
-func makeTestJWTCookie(name string, secret []byte, level string, expires time.Time) *http.Cookie {
+func makeTestJWTCookie(name, token string) *http.Cookie {
+	return &http.Cookie{
+		Name:  name,
+		Value: token,
+	}
+}
+
+func makeTestJWT(secret []byte, level string, expires time.Time) string {
 	claim := ProxyClaim{
 		Level: level,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -95,8 +102,5 @@ func makeTestJWTCookie(name string, secret []byte, level string, expires time.Ti
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
 	tokenString, _ := token.SignedString(secret)
 
-	return &http.Cookie{
-		Name:  name,
-		Value: tokenString,
-	}
+	return tokenString
 }

@@ -2,8 +2,9 @@ package proxy
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"testing"
 	"time"
 
@@ -24,6 +25,8 @@ var (
 )
 
 func Test_Functional(t *testing.T) {
+	client.Jar, _ = cookiejar.New(nil)
+
 	// run functional tests
 	status := godog.TestSuite{
 		Name:                 "functional tests",
@@ -50,7 +53,7 @@ func sendRequest(url string, c *http.Cookie) error {
 	}
 
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
 	}
@@ -59,18 +62,28 @@ func sendRequest(url string, c *http.Cookie) error {
 	return nil
 }
 
-func weSendARequestWithValidAuthorizationDataAuthorizingAccess(level string) error {
-	c := makeTestJWTCookie(p.CookieName, p.Secret, level, time.Now().AddDate(0, 0, 1))
-	return sendRequest(p.Host, c)
+func weSendARequestWithAuthorizationDataAuthorizingAccess(where, level string) error {
+	var c *http.Cookie
+	url := p.Host
+	token := makeTestJWT(p.Secret, level, time.Now().AddDate(0, 0, 1))
+
+	if where == "cookie" {
+		c = makeTestJWTCookie(p.CookieName, token)
+	} else {
+		url += fmt.Sprintf("?%s=%s", p.TokenParam, token)
+	}
+	return sendRequest(url, c)
 }
 
 func weSendARequestWithAuthorizationData(t string) error {
 	var c *http.Cookie
 	switch t {
 	case "expired":
-		c = makeTestJWTCookie(p.CookieName, p.Secret, "level", time.Now().AddDate(0, 0, -1))
+		token := makeTestJWT(p.Secret, "level", time.Now().AddDate(0, 0, -1))
+		c = makeTestJWTCookie(p.CookieName, token)
 	case "invalid":
-		c = makeTestJWTCookie(p.CookieName, []byte("bad"), "level", time.Now().AddDate(0, 0, 1))
+		token := makeTestJWT([]byte("bad"), "level", time.Now().AddDate(0, 0, 1))
+		c = makeTestJWTCookie(p.CookieName, token)
 	case "no":
 		c = nil
 	default:
@@ -85,7 +98,7 @@ func weWillBeRedirectedToTheManagementApi() error {
 }
 
 func weDoNotSeeAnErrorMessage() error {
-	return assertEqual(http.StatusOK, last.response.StatusCode)
+	return assertEqual(http.StatusOK, last.response.StatusCode, "incorrect http status, body=%s", last.body)
 }
 
 func weWillSeeAnErrorMessage() error {
@@ -118,7 +131,8 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^we send a request with (\w+) authorization data$`, weSendARequestWithAuthorizationData)
-	ctx.Step(`^we send a request with valid authorization data authorizing (\w+) access$`, weSendARequestWithValidAuthorizationDataAuthorizingAccess)
+	ctx.Step(`^we send a request with authorization data in the (\w+) authorizing (\w+) access$`,
+		weSendARequestWithAuthorizationDataAuthorizingAccess)
 	ctx.Step(`^we will be redirected to the management api$`, weWillBeRedirectedToTheManagementApi)
 	ctx.Step(`^we do not see an error message$`, weDoNotSeeAnErrorMessage)
 	ctx.Step(`^we will see an error message$`, weWillSeeAnErrorMessage)
