@@ -89,8 +89,8 @@ func weDoNotSeeAnErrorMessage() error {
 }
 
 func weWillSeeAnErrorMessage() error {
-	return assertEqual(http.StatusInternalServerError, last.response.StatusCode,
-		"expected a 500, --%s-- got a %d, body: %s", p.Host, last.response.StatusCode, last.body)
+	return assertEqual(http.StatusBadRequest, last.response.StatusCode,
+		"expected a 400, --%s-- got a %d, body: %s", p.Host, last.response.StatusCode, last.body)
 }
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
