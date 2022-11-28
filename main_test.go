@@ -77,7 +77,7 @@ func Test_AuthProxy(t *testing.T) {
 			if tc.wantErr {
 				assert.ErrorContains(err, tc.want)
 			} else {
-				assert.NoError(err)
+				assert.Nil(err)
 				assert.Equal(tc.want, to)
 			}
 		})

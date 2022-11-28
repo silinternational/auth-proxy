@@ -51,6 +51,21 @@ type Proxy struct {
 	log   *zap.Logger `ignored:"true"`
 }
 
+type Error struct {
+	// Message contains a message that is safe for display to the end user
+	Message string
+
+	// Status is the http status code for the response
+	Status int
+
+	// err contains the original error message, not necessarily safe for display to the end user
+	err error
+}
+
+func (e *Error) Error() string {
+	return e.err.Error()
+}
+
 func (Proxy) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
 		ID:  "http.handlers.dynamic_proxy",
@@ -78,14 +93,21 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 
 	to, err := p.authRedirect(w, r)
 	if err != nil {
+		w.WriteHeader(err.Status)
+		_, writeErr := w.Write([]byte(err.Message))
+		if writeErr != nil {
+			p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+		}
+		p.log.Error(err.Message, zap.Int("status", err.Status), zap.String("error", err.Error()))
 		return err
 	}
+
 	p.setVar(r, "upstream", to)
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, error) {
+func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Error) {
 	token := p.getToken(r)
 
 	if token == "" {
@@ -96,7 +118,12 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 
 	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			err := &Error{
+				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
+				Message: "error: invalid access token",
+				Status:  http.StatusBadRequest,
+			}
+			return nil, err
 		}
 
 		return p.Secret, nil
@@ -106,7 +133,11 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 		p.setVar(r, "returnTo", url.QueryEscape(p.Host+r.URL.Path))
 		return p.ManagementAPI + p.TokenPath, nil
 	} else if err != nil {
-		return "", fmt.Errorf("authRedirect failed to parse token: %w", err)
+		return "", &Error{
+			err:     fmt.Errorf("authRedirect failed to parse token: %w", err),
+			Message: "error: corrupted access token",
+			Status:  http.StatusBadRequest,
+		}
 	}
 
 	ck := http.Cookie{
@@ -119,7 +150,11 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, err
 
 	result, ok := p.Sites[p.claim.Level]
 	if !ok {
-		return "", fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites)
+		return "", &Error{
+			err:     fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites),
+			Message: "error: unrecognized access level",
+			Status:  http.StatusBadRequest,
+		}
 	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
