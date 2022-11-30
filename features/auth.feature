@@ -14,13 +14,16 @@ Feature: functional test cases
 		Then we will see an error message
 
 	Scenario Outline: Authorization data specifying various levels of access
-		When we send a request with valid authorization data authorizing <accessLevel> access
+		When we send a request with authorization data in the <urlOrCookie> authorizing <accessLevel> access
 		Then we do not see an error message
 		And we do not see the token parameter
 		And we will see the <accessLevel> version of the website
 
 		Examples:
-			| accessLevel |
-			| one         |
-			| two         |
-			| three       |
+			| urlOrCookie | accessLevel |
+			| cookie      | one         |
+			| cookie      | two         |
+			| cookie      | three       |
+			| url         | one         |
+			| url         | two         |
+			| url         | three       |

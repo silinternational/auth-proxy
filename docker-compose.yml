@@ -26,10 +26,14 @@ services:
       - ./:/app
 
   test:
-    image: golang:1.18
+    build:
+      context: .
+      dockerfile: Dockerfile-test
     env_file: test.env
     volumes:
       - .:/src
+      - go-build:/root/.cache/go-build
+      - go-mod:/go/pkg/mod
     working_dir: /src
     depends_on:
       - testapp
