@@ -2,13 +2,21 @@
 	order dynamic_proxy first
 }
 
-:80, :443 {
+:80 {
 	encode zstd gzip
 	dynamic_proxy
 
+	@preflight method OPTIONS
 	@management_api expression {vars.upstream}.startsWith('{$MANAGEMENT_API}')
 	@static_site expression !{vars.upstream}.startsWith('{$MANAGEMENT_API}')
 	@clear_query expression {vars.clear_query} == "true"
+
+	header @preflight Connection keep-alive
+	header @preflight Access-Control-Allow-Origin {$MANAGEMENT_API}
+	header @preflight Access-Control-Allow-Methods "DELETE, GET, OPTIONS, POST, PUT"
+	header @preflight Access-Control-Max-Age 86400
+
+	respond @preflight 204
 
 	# redirect to the management api with a returnTo parameter
 	redir @management_api "{vars.upstream}?returnTo={vars.returnTo}"
@@ -18,5 +26,9 @@
 
 	reverse_proxy @static_site {vars.upstream} {
 		header_up Host {vars.upstream}
+	}
+
+	log {
+		output stdout
 	}
 }
