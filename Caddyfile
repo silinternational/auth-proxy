@@ -7,6 +7,7 @@
 	dynamic_proxy
 
 	@preflight method OPTIONS
+	@management_api_with_returnto expression {vars.upstream}.startsWith('{$MANAGEMENT_API}') && vars.returnTo != ""
 	@management_api expression {vars.upstream}.startsWith('{$MANAGEMENT_API}')
 	@static_site expression !{vars.upstream}.startsWith('{$MANAGEMENT_API}')
 	@clear_query expression {vars.clear_query} == "true"
@@ -19,7 +20,10 @@
 	respond @preflight 204
 
 	# redirect to the management api with a returnTo parameter
-	redir @management_api "{vars.upstream}?returnTo={vars.returnTo}"
+	redir @management_api_with_returnto "{vars.upstream}?returnTo={vars.returnTo}"
+
+	# redirect to the management api without a returnTo parameter
+	redir @management_api "{vars.upstream}"
 
 	# redirect back to the auth-proxy, but to the path without the query string
 	redir @clear_query {path}
