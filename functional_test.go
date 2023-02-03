@@ -2,8 +2,9 @@ package proxy
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"testing"
 	"time"
 
@@ -23,21 +24,38 @@ var (
 	client = http.DefaultClient
 )
 
-const testURL = "http://testapp"
-
 func Test_Functional(t *testing.T) {
-	// setup
-	var err error
-	p, err = newProxy()
-	assert.NoError(t, err)
-
 	// run functional tests
 	status := godog.TestSuite{
-		Name:                "functional tests",
-		ScenarioInitializer: InitializeScenario,
+		Name:                 "functional tests",
+		ScenarioInitializer:  InitializeScenario,
+		TestSuiteInitializer: InitializeTestSuite,
 	}.Run()
 
-	assert.Equal(t, 0, status)
+	// Any test initialization should be done in Godog hooks, e.g.: InitializeTestSuite or InitializeScenario
+
+	assert.Equal(t, 0, status, "One or more functional tests failed.")
+}
+
+func InitializeTestSuite(ctx *godog.TestSuiteContext) {
+	ctx.BeforeSuite(func() {
+		var err error
+		if p, err = newProxy(); err != nil {
+			panic(err.Error())
+		}
+		client.Jar, _ = cookiejar.New(nil)
+	})
+}
+
+func InitializeScenario(ctx *godog.ScenarioContext) {
+	ctx.Step(`^we send a request with (\w+) authorization data$`, weSendARequestWithAuthorizationData)
+	ctx.Step(`^we send a request with authorization data in the (\w+) authorizing (\w+) access$`,
+		weSendARequestWithAuthorizationDataAuthorizingAccess)
+	ctx.Step(`^we will be redirected to the management api$`, weWillBeRedirectedToTheManagementApi)
+	ctx.Step(`^we do not see an error message$`, weDoNotSeeAnErrorMessage)
+	ctx.Step(`^we will see an error message$`, weWillSeeAnErrorMessage)
+	ctx.Step(`^we will see the (\w+) version of the website$`, weWillSeeTheAccessLevelVersionOfTheWebsite)
+	ctx.Step(`^we do not see the token parameter$`, weDoNotSeeTheTokenParameter)
 }
 
 func sendRequest(url string, c *http.Cookie) error {
@@ -56,7 +74,7 @@ func sendRequest(url string, c *http.Cookie) error {
 	}
 
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
 	}
@@ -65,64 +83,62 @@ func sendRequest(url string, c *http.Cookie) error {
 	return nil
 }
 
-func weSendARequestWithValidAuthorizationDataAuthorizingAccess(level string) error {
-	c := makeTestJWTCookie(p.cookieName, p.tokenSecret, level, time.Now().AddDate(0, 0, 1))
-	return sendRequest(testURL, c)
+func weSendARequestWithAuthorizationDataAuthorizingAccess(where, level string) error {
+	var c *http.Cookie
+	url := p.Host
+	token := makeTestJWT(p.Secret, level, time.Now().AddDate(0, 0, 1))
+
+	if where == "cookie" {
+		c = makeTestJWTCookie(p.CookieName, token)
+	} else {
+		url += fmt.Sprintf("?%s=%s", p.TokenParam, token)
+	}
+	return sendRequest(url, c)
 }
 
 func weSendARequestWithAuthorizationData(t string) error {
 	var c *http.Cookie
 	switch t {
 	case "expired":
-		c = makeTestJWTCookie(p.cookieName, p.tokenSecret, "level", time.Now().AddDate(0, 0, -1))
+		token := makeTestJWT(p.Secret, "level", time.Now().AddDate(0, 0, -1))
+		c = makeTestJWTCookie(p.CookieName, token)
 	case "invalid":
-		c = makeTestJWTCookie(p.cookieName, "bad", "level", time.Now().AddDate(0, 0, 1))
+		token := makeTestJWT([]byte("bad"), "level", time.Now().AddDate(0, 0, 1))
+		c = makeTestJWTCookie(p.CookieName, token)
 	case "no":
 		c = nil
 	default:
 		return godog.ErrPending
 	}
-	return sendRequest(testURL, c)
+	return sendRequest(p.Host, c)
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
-	err := assertEqual(http.StatusTemporaryRedirect, last.response.StatusCode)
-	if err != nil {
-		return err
-	}
-
-	loc, err := last.response.Location()
-	if err != nil {
-		return err
-	}
-
-	return assertEqual(p.managementAPI, loc.String())
+	return assertContains(last.body, "<title>API</title>",
+		`did not see "API" in the response body title: %s`, last.body)
 }
 
 func weDoNotSeeAnErrorMessage() error {
-	return assertEqual(http.StatusOK, last.response.StatusCode)
+	return assertEqual(http.StatusOK, last.response.StatusCode, "incorrect http status, body=%s", last.body)
 }
 
 func weWillSeeAnErrorMessage() error {
-	return assertEqual(http.StatusInternalServerError, last.response.StatusCode)
+	return assertEqual(http.StatusBadRequest, last.response.StatusCode,
+		"expected a 400, --%s-- got a %d, body: %s", p.Host, last.response.StatusCode, last.body)
 }
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest("http://"+p.sites[level], nil); err != nil {
+	if err := sendRequest("http://"+p.Sites[level], nil); err != nil {
 		return err
 	}
 
 	return assertEqual(last.body, proxy.body)
 }
 
-func InitializeScenario(ctx *godog.ScenarioContext) {
-	ctx.Step(`^we send a request with (\w+) authorization data$`, weSendARequestWithAuthorizationData)
-	ctx.Step(`^we send a request with valid authorization data authorizing (\w+) access$`, weSendARequestWithValidAuthorizationDataAuthorizingAccess)
-	ctx.Step(`^we will be redirected to the management api$`, weWillBeRedirectedToTheManagementApi)
-	ctx.Step(`^we do not see an error message$`, weDoNotSeeAnErrorMessage)
-	ctx.Step(`^we will see an error message$`, weWillSeeAnErrorMessage)
-	ctx.Step(`^we will see the (\w+) version of the website$`, weWillSeeTheAccessLevelVersionOfTheWebsite)
+func weDoNotSeeTheTokenParameter() error {
+	token := last.response.Request.URL.Query().Get(p.TokenParam)
+	return assertEqual("", token)
 }
 
 // Helper functions
@@ -138,5 +154,11 @@ func (a *asserter) Errorf(format string, args ...interface{}) {
 func assertEqual(expected, actual interface{}, msgAndArgs ...interface{}) error {
 	var a asserter
 	assert.Equal(&a, expected, actual, msgAndArgs...)
+	return a.err
+}
+
+func assertContains(s, contains interface{}, msgAndArgs ...interface{}) error {
+	var a asserter
+	assert.Contains(&a, s, contains, msgAndArgs...)
 	return a.err
 }

@@ -1,2 +1,18 @@
 :80
-respond "{$HOSTNAME} {uri}"
+respond 200 {
+	body "<!DOCTYPE html>
+		<html>
+			<head>
+				<title>{$SERVER}</title>
+			</head>
+			<body>
+					<p><b>hostname:</b> {$HOSTNAME}</p>
+					<p><b>uri:</b> {uri}</p>
+					<p><b>host:</b> {host}<p>
+			</body>
+		</html>
+"
+}
+log {
+	output stdout
+}

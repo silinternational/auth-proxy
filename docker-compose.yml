@@ -4,30 +4,36 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-dev
     ports:
       - "53060:80"
       - "53061:443"
       - "53062:2019"
     env_file: local.env
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-    command: caddy run
+      - ./:/app
+      - go-build:/root/.cache/go-build
+      - go-mod:/go/pkg/mod
 
   testapp:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-dev
+    ports:
+      - "53063:80"
     env_file: test.env
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-    command: caddy run
+      - ./:/app
 
   test:
-    image: golang:1.18
+    build:
+      context: .
+      dockerfile: Dockerfile-test
     env_file: test.env
     volumes:
       - .:/src
+      - go-build:/root/.cache/go-build
+      - go-mod:/go/pkg/mod
     working_dir: /src
     depends_on:
       - testapp
@@ -38,24 +44,36 @@ services:
 
   fakemanagementapi:
     image: caddy:latest
+    environment:
+      SERVER: API
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server1:
     image: caddy:latest
+    environment:
+      SERVER: server1
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server2:
     image: caddy:latest
+    environment:
+      SERVER: server2
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
 
   server3:
     image: caddy:latest
+    environment:
+      SERVER: server3
     volumes:
       - ./Caddyfile-test:/srv/Caddyfile
     command: caddy run
+
+volumes:
+  go-build: {}
+  go-mod: {}

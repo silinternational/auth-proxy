@@ -7,7 +7,6 @@ require (
 	github.com/cucumber/godog v0.12.5
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.21.0
 )
@@ -79,6 +78,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect

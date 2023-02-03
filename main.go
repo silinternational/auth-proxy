@@ -2,15 +2,17 @@ package proxy
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -31,13 +33,37 @@ type ProxyClaim struct {
 }
 
 type Proxy struct {
-	cookieName    string    `required:"true" split_words:"true"`
-	tokenSecret   string    `required:"true" split_words:"true"`
-	sites         AuthSites `required:"true" split_words:"true"`
-	managementAPI string    `required:"true" split_words:"true"`
+	Host          string    `required:"true"`
+	TokenSecret   string    `required:"true" split_words:"true"`
+	Sites         AuthSites `required:"true" split_words:"true"`
+	ManagementAPI string    `required:"true" split_words:"true"`
+
+	// optional params
+	CookieName    string `default:"_auth_proxy" split_words:"true"`
+	ReturnToParam string `default:"returnTo" split_words:"true"`
+	TokenParam    string `default:"token" split_words:"true"`
+	TokenPath     string `default:"/auth/token" split_words:"true"`
+
+	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
+	Secret []byte `ignored:"true"`
 
 	claim ProxyClaim  `ignored:"true"`
 	log   *zap.Logger `ignored:"true"`
+}
+
+type Error struct {
+	// Message contains a message that is safe for display to the end user
+	Message string
+
+	// Status is the http status code for the response
+	Status int
+
+	// err contains the original error message, not necessarily safe for display to the end user
+	err error
+}
+
+func (e *Error) Error() string {
+	return e.err.Error()
 }
 
 func (Proxy) CaddyModule() caddy.ModuleInfo {
@@ -60,44 +86,88 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	to, err := p.authRedirect(r)
+	if r.URL.Path == "/status" {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	}
+
+	to, err := p.authRedirect(w, r)
 	if err != nil {
+		w.WriteHeader(err.Status)
+		_, writeErr := w.Write([]byte(err.Message))
+		if writeErr != nil {
+			p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+		}
+		p.log.Error(err.Message, zap.Int("status", err.Status), zap.String("error", err.Error()))
 		return err
 	}
-	caddyhttp.SetVar(r.Context(), "upstream", to)
-	p.log.Info("setting upstream to " + to)
+
+	p.setVar(r, "upstream", to)
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(r *http.Request) (string, error) {
-	// if no cookie, redirect to get new cookie
-	cookie, err := r.Cookie(p.cookieName)
-	if err != nil {
-		p.log.Info("no jwt exists, calling management api")
-		return p.managementAPI, nil
+func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Error) {
+	token := p.getToken(r)
+
+	if token == "" {
+		p.log.Info("no token found, calling management api")
+		p.setVar(r, "returnTo", url.QueryEscape(p.Host+r.URL.Path))
+		return p.ManagementAPI + p.TokenPath, nil
 	}
 
-	_, err = jwt.ParseWithClaims(cookie.Value, &p.claim, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			err := &Error{
+				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
+				Message: "error: invalid access token",
+				Status:  http.StatusBadRequest,
+			}
+			return nil, err
 		}
 
-		return []byte(p.tokenSecret), nil
+		return p.Secret, nil
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
-		p.log.Info("jwt has expired")
-		return p.managementAPI, nil
+		p.log.Info("jwt has expired, calling management api")
+		p.setVar(r, "returnTo", url.QueryEscape(p.Host+r.URL.Path))
+		return p.ManagementAPI + p.TokenPath, nil
 	} else if err != nil {
-		return "", err
+		return "", &Error{
+			err:     fmt.Errorf("authRedirect failed to parse token: %w", err),
+			Message: "error: corrupted access token",
+			Status:  http.StatusBadRequest,
+		}
 	}
 
-	result, ok := p.sites[p.claim.Level]
+	ck := http.Cookie{
+		Name:    p.CookieName,
+		Value:   token,
+		Expires: p.claim.ExpiresAt.Time,
+		Path:    "/",
+	}
+	http.SetCookie(w, &ck)
+
+	result, ok := p.Sites[p.claim.Level]
 	if !ok {
-		return "", fmt.Errorf("unknown auth level: %v", p.claim.Level)
+		return "", &Error{
+			err:     fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites),
+			Message: "error: unrecognized access level",
+			Status:  http.StatusBadRequest,
+		}
 	}
 
+	returnTo := r.URL.Query().Get(p.ReturnToParam)
+	if returnTo != "" && strings.HasPrefix(returnTo, p.ManagementAPI) {
+		p.log.Info("redirecting back to the management API")
+		return returnTo, nil
+	}
 	return result, nil
+}
+
+func (p Proxy) setVar(r *http.Request, name, value string) {
+	caddyhttp.SetVar(r.Context(), name, value)
+	p.log.Info("setting " + name + " to " + value)
 }
 
 func newDynamicProxy(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -110,11 +180,23 @@ func newProxy() (Proxy, error) {
 		return p, err
 	}
 
-	secret, err := base64.StdEncoding.DecodeString(p.tokenSecret)
+	var err error
+	p.Secret, err = base64.StdEncoding.DecodeString(p.TokenSecret)
 	if err != nil {
 		return p, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
 	}
-	p.tokenSecret = string(secret)
+	return p, nil
+}
 
-	return p, err
+// getToken returns a token found in either a cookie or the query string
+func (p Proxy) getToken(r *http.Request) string {
+	if token := r.URL.Query().Get(p.TokenParam); token != "" {
+		// if we got the token from the query string, set a flag for the Caddyfile to redirect without it
+		p.setVar(r, "clear_query", "true")
+		return token
+	}
+	if cookie, err := r.Cookie(p.CookieName); err == nil {
+		return cookie.Value
+	}
+	return ""
 }
