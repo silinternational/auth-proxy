@@ -24,7 +24,7 @@
 		header_up Host {vars.upstream}
 	}
 
-	log {
-		output stdout
-	}
+#	log {
+#		output stdout
+#	}
 }
