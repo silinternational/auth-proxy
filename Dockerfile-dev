@@ -1,4 +1,4 @@
-FROM caddy:builder
+FROM caddy:2-builder
 
 WORKDIR /app
 COPY . .
