@@ -22,9 +22,10 @@
 
 	reverse_proxy @static_site {vars.upstream} {
 		header_up Host {vars.upstream}
+		header_down +Cache-Control "no-store"
 	}
 
-#	log {
-#		output stdout
-#	}
+	#	log {
+	#		output stdout
+	#	}
 }
