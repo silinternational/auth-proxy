@@ -6,37 +6,25 @@
 	encode zstd gzip
 	dynamic_proxy
 
-	@preflight method OPTIONS
-	handle @preflight {
-		header Connection keep-alive
-		header Access-Control-Allow-Origin {$MANAGEMENT_API}
-		header Access-Control-Allow-Methods "DELETE, GET, OPTIONS, POST, PUT"
-		header Access-Control-Max-Age 86400
+	@management_api_with_returnto expression {vars.upstream}.startsWith('{$MANAGEMENT_API}') && {vars.returnTo} != ""
+	@management_api expression {vars.upstream}.startsWith('{$MANAGEMENT_API}')
+	@static_site expression !{vars.upstream}.startsWith('{$MANAGEMENT_API}')
+	@clear_query expression {vars.clear_query} == "true"
 
-		respond 204
+	# redirect to the management api with a returnTo parameter
+	redir @management_api_with_returnto "{vars.upstream}?returnTo={vars.returnTo}"
+
+	# redirect to the management api without a returnTo parameter
+	redir @management_api "{vars.upstream}"
+
+	# redirect back to the auth-proxy, but to the path without the query string
+	redir @clear_query {path}
+
+	reverse_proxy @static_site {vars.upstream} {
+		header_up Host {vars.upstream}
 	}
 
-	handle {
-		@management_api_with_returnto expression {vars.upstream}.startsWith('{$MANAGEMENT_API}') && {vars.returnTo} != ""
-		@management_api expression {vars.upstream}.startsWith('{$MANAGEMENT_API}')
-		@static_site expression !{vars.upstream}.startsWith('{$MANAGEMENT_API}')
-		@clear_query expression {vars.clear_query} == "true"
-
-		# redirect to the management api with a returnTo parameter
-		redir @management_api_with_returnto "{vars.upstream}?returnTo={vars.returnTo}"
-
-		# redirect to the management api without a returnTo parameter
-		redir @management_api "{vars.upstream}"
-
-		# redirect back to the auth-proxy, but to the path without the query string
-		redir @clear_query {path}
-
-		reverse_proxy @static_site {vars.upstream} {
-			header_up Host {vars.upstream}
-		}
-	}
-
-	log {
-		output stdout
-	}
+#	log {
+#		output stdout
+#	}
 }

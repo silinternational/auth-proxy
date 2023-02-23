@@ -43,7 +43,7 @@ services:
       - server3
 
   fakemanagementapi:
-    image: caddy:latest
+    image: caddy:2
     environment:
       SERVER: API
     volumes:
@@ -51,7 +51,7 @@ services:
     command: caddy run
 
   server1:
-    image: caddy:latest
+    image: caddy:2
     environment:
       SERVER: server1
     volumes:
@@ -59,7 +59,7 @@ services:
     command: caddy run
 
   server2:
-    image: caddy:latest
+    image: caddy:2
     environment:
       SERVER: server2
     volumes:
@@ -67,7 +67,7 @@ services:
     command: caddy run
 
   server3:
-    image: caddy:latest
+    image: caddy:2
     environment:
       SERVER: server3
     volumes:
