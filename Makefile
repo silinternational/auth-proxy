@@ -1,7 +1,7 @@
 dev:
 	docker-compose up -d app fakemanagementapi server1 server2 server3
 
-test:
+test: dev
 	docker-compose run --rm test ./run-tests.sh
 
 clean:
