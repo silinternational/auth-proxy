@@ -158,9 +158,11 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Er
 	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
+	p.log.Info("returnTo", zap.String(p.ReturnToParam, returnTo), zap.String("url", r.URL.String()))
 	if returnTo != "" && p.isTrusted(returnTo) {
 		p.log.Info("redirecting", zap.String("url", returnTo))
-		return returnTo, nil
+		w.Header().Set("location", returnTo)
+		w.WriteHeader(http.StatusTemporaryRedirect)
 	}
 	return result, nil
 }
