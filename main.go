@@ -158,11 +158,21 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Er
 	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
-	if returnTo != "" && strings.HasPrefix(returnTo, p.ManagementAPI) {
-		p.log.Info("redirecting back to the management API")
+	if returnTo != "" && p.isTrusted(returnTo) {
+		p.log.Info("redirecting", zap.String("url", returnTo))
 		return returnTo, nil
 	}
 	return result, nil
+}
+
+func (p *Proxy) isTrusted(returnTo string) bool {
+	if strings.HasPrefix(returnTo, p.ManagementAPI) {
+		return true
+	}
+	if strings.HasPrefix(returnTo, p.Host) {
+		return true
+	}
+	return false
 }
 
 func (p Proxy) setVar(r *http.Request, name, value string) {
