@@ -12,18 +12,22 @@ import (
 )
 
 func Test_AuthProxy(t *testing.T) {
+	const managementAPI = "http://management_api.example.com"
+	const tokenPath = "/auth/token"
+
 	assert := assert.New(t)
 	cookieName := "_test"
 	tokenSecret := []byte("secret")
-	managementAPI := "management_api"
 	authURLs := AuthSites{"good": "good url"}
 	validTime := time.Now().AddDate(0, 0, 1)
 	expiredTime := time.Now().AddDate(0, 0, -1)
 	proxy := Proxy{
-		CookieName: cookieName,
-		Secret:     tokenSecret,
-		Sites:      authURLs,
-		log:        zap.L(),
+		CookieName:    cookieName,
+		Secret:        tokenSecret,
+		Sites:         authURLs,
+		log:           zap.L(),
+		ManagementAPI: managementAPI,
+		TokenPath:     tokenPath,
 	}
 
 	tests := []struct {
@@ -36,7 +40,7 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "no cookie",
 			cookie:  nil,
 			wantErr: false,
-			want:    managementAPI,
+			want:    managementAPI + tokenPath,
 		},
 		{
 			name:    "invalid cookie",
@@ -48,13 +52,13 @@ func Test_AuthProxy(t *testing.T) {
 			name:    "expired cookie",
 			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", expiredTime)),
 			wantErr: false,
-			want:    managementAPI,
+			want:    managementAPI + tokenPath,
 		},
 		{
 			name:    "invalid level",
 			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "bad", validTime)),
 			wantErr: true,
-			want:    "unknown auth level",
+			want:    "not in sites",
 		},
 		{
 			name:    "valid",
@@ -66,7 +70,6 @@ func Test_AuthProxy(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			if tc.cookie != nil {
 				r.AddCookie(tc.cookie)
