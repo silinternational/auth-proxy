@@ -25,7 +25,7 @@
 :80 {
 	encode zstd gzip
 	dynamic_proxy
-	import cors {$ALLOW_CORS_FROM}
+	import cors {$MANAGEMENT_API}
 
 	@management_api_with_returnto expression {vars.upstream}.startsWith('{$MANAGEMENT_API}') && {vars.returnTo} != ""
 	@management_api expression {vars.upstream}.startsWith('{$MANAGEMENT_API}')
