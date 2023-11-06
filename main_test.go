@@ -1,11 +1,14 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -30,41 +33,43 @@ func Test_AuthProxy(t *testing.T) {
 		TokenPath:     tokenPath,
 	}
 
+	redirectURL := managementAPI + tokenPath + "?returnTo=%2F"
+	upstream := authURLs["good"]
+
 	tests := []struct {
-		name    string
-		cookie  *http.Cookie
-		wantErr bool
-		want    string
+		name            string
+		cookie          *http.Cookie
+		wantErr         string
+		wantRedirectURL *string
+		wantUpstream    *string
 	}{
 		{
-			name:    "no cookie",
-			cookie:  nil,
-			wantErr: false,
-			want:    managementAPI + tokenPath,
+			name:            "no cookie",
+			cookie:          nil,
+			wantErr:         "",
+			wantRedirectURL: &redirectURL,
 		},
 		{
 			name:    "invalid cookie",
 			cookie:  makeTestJWTCookie(cookieName, makeTestJWT([]byte("bad"), "good", validTime)),
-			wantErr: true,
-			want:    "signature is invalid",
+			wantErr: "signature is invalid",
 		},
 		{
-			name:    "expired cookie",
-			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", expiredTime)),
-			wantErr: false,
-			want:    managementAPI + tokenPath,
+			name:            "expired cookie",
+			cookie:          makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", expiredTime)),
+			wantErr:         "",
+			wantRedirectURL: &redirectURL,
 		},
 		{
 			name:    "invalid level",
 			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "bad", validTime)),
-			wantErr: true,
-			want:    "not in sites",
+			wantErr: "not in sites",
 		},
 		{
-			name:    "valid",
-			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", validTime)),
-			wantErr: false,
-			want:    authURLs["good"],
+			name:         "valid",
+			cookie:       makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", validTime)),
+			wantErr:      "",
+			wantUpstream: &upstream,
 		},
 	}
 
@@ -74,14 +79,23 @@ func Test_AuthProxy(t *testing.T) {
 			if tc.cookie != nil {
 				r.AddCookie(tc.cookie)
 			}
+			ctx := context.WithValue(r.Context(), caddy.CtxKey("vars"), map[string]any{})
+			r = r.WithContext(ctx)
 
 			var w httptest.ResponseRecorder
-			to, err := proxy.authRedirect(&w, r)
-			if tc.wantErr {
-				assert.ErrorContains(err, tc.want)
-			} else {
-				assert.Nil(err)
-				assert.Equal(tc.want, to)
+			err := proxy.authRedirect(&w, r)
+
+			if tc.wantErr != "" {
+				assert.ErrorContains(err, tc.wantErr)
+				return
+			}
+			assert.Nil(err)
+
+			if tc.wantUpstream != nil {
+				assert.Equal(*tc.wantUpstream, caddyhttp.GetVar(r.Context(), CaddyVarUpstream))
+			}
+			if tc.wantRedirectURL != nil {
+				assert.Equal(*tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
 			}
 		})
 	}
