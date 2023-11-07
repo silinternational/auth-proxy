@@ -97,7 +97,6 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 	}
 
 	if err := p.authRedirect(w, r); err != nil {
-	if err != nil {
 		w.WriteHeader(err.Status)
 		_, writeErr := w.Write([]byte(err.Message))
 		if writeErr != nil {
