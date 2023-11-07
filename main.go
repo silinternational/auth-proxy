@@ -16,6 +16,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	CaddyVarUpstream    = "upstream"
+	CaddyVarRedirectURL = "redirect_url"
+)
+
 // Interface guards
 var (
 	_ caddy.Provisioner           = (*Proxy)(nil)
@@ -91,8 +96,7 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	to, err := p.authRedirect(w, r)
-	if err != nil {
+	if err := p.authRedirect(w, r); err != nil {
 		w.WriteHeader(err.Status)
 		_, writeErr := w.Write([]byte(err.Message))
 		if writeErr != nil {
@@ -102,18 +106,16 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return err
 	}
 
-	p.setVar(r, "upstream", to)
-
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Error) {
+func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
 	token := p.getToken(r)
 
 	if token == "" {
 		p.log.Info("no token found, calling management api")
-		p.setVar(r, "returnTo", url.QueryEscape(p.Host+r.URL.Path))
-		return p.ManagementAPI + p.TokenPath, nil
+		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+		return nil
 	}
 
 	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
@@ -130,10 +132,10 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Er
 	})
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired, calling management api")
-		p.setVar(r, "returnTo", url.QueryEscape(p.Host+r.URL.Path))
-		return p.ManagementAPI + p.TokenPath, nil
+		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+		return nil
 	} else if err != nil {
-		return "", &Error{
+		return &Error{
 			err:     fmt.Errorf("authRedirect failed to parse token: %w", err),
 			Message: "error: corrupted access token",
 			Status:  http.StatusBadRequest,
@@ -148,9 +150,9 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Er
 	}
 	http.SetCookie(w, &ck)
 
-	result, ok := p.Sites[p.claim.Level]
+	upstream, ok := p.Sites[p.claim.Level]
 	if !ok {
-		return "", &Error{
+		return &Error{
 			err:     fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites),
 			Message: "error: unrecognized access level",
 			Status:  http.StatusBadRequest,
@@ -158,11 +160,23 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) (string, *Er
 	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
-	if returnTo != "" && strings.HasPrefix(returnTo, p.ManagementAPI) {
-		p.log.Info("redirecting back to the management API")
-		return returnTo, nil
+	if returnTo != "" && p.isTrusted(returnTo) {
+		p.setVar(r, CaddyVarRedirectURL, returnTo)
+		return nil
 	}
-	return result, nil
+
+	p.setVar(r, CaddyVarUpstream, upstream)
+	return nil
+}
+
+func (p *Proxy) isTrusted(returnTo string) bool {
+	if strings.HasPrefix(returnTo, p.ManagementAPI) {
+		return true
+	}
+	if strings.HasPrefix(returnTo, p.Host) {
+		return true
+	}
+	return false
 }
 
 func (p Proxy) setVar(r *http.Request, name, value string) {
@@ -188,13 +202,20 @@ func newProxy() (Proxy, error) {
 	return p, nil
 }
 
-// getToken returns a token found in either a cookie or the query string
+// getToken returns a token found in either a cookie or the query string. If found in the query string, set a Caddy
+// variable to force a redirect to clear it from the query string.
 func (p Proxy) getToken(r *http.Request) string {
 	if token := r.URL.Query().Get(p.TokenParam); token != "" {
-		// if we got the token from the query string, set a flag for the Caddyfile to redirect without it
-		p.setVar(r, "clear_query", "true")
+		// if we got the token from the query string, set a URL for the Caddyfile to redirect without it
+		u := r.URL
+		q := u.Query()
+		q.Del(p.TokenParam)
+		u.RawQuery = q.Encode()
+
+		p.setVar(r, CaddyVarRedirectURL, u.String())
 		return token
 	}
+
 	if cookie, err := r.Cookie(p.CookieName); err == nil {
 		return cookie.Value
 	}
