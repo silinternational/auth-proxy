@@ -117,14 +117,12 @@ func Test_getToken(t *testing.T) {
 
 	testJWT := makeTestJWT(secret, "good", time.Now().AddDate(0, 0, 1))
 
-	redirectURL := "/"
-
 	tests := []struct {
 		name            string
 		cookie          *http.Cookie
 		query           string
 		want            string
-		wantRedirectURL *string
+		wantRedirectURL string
 	}{
 		{
 			name: "no token",
@@ -134,7 +132,7 @@ func Test_getToken(t *testing.T) {
 			name:            "token in URL param",
 			query:           tokenParam + "=abc123",
 			want:            "abc123",
-			wantRedirectURL: &redirectURL,
+			wantRedirectURL: "/",
 		},
 		{
 			name:   "token in cookie",
@@ -146,7 +144,13 @@ func Test_getToken(t *testing.T) {
 			cookie:          makeTestJWTCookie(cookieName, testJWT),
 			query:           tokenParam + "=abc123",
 			want:            "abc123",
-			wantRedirectURL: &redirectURL,
+			wantRedirectURL: "/",
+		},
+		{
+			name:            "token and returnTo in URL params",
+			query:           tokenParam + "=abc123&returnTo=https%3A%2F%2Fexample.com%2Fpath",
+			want:            "abc123",
+			wantRedirectURL: "/?returnTo=https%3A%2F%2Fexample.com%2Fpath",
 		},
 	}
 
@@ -162,8 +166,8 @@ func Test_getToken(t *testing.T) {
 
 			token := proxy.getToken(r)
 			assrt.Equal(tc.want, token)
-			if tc.wantRedirectURL != nil {
-				assrt.Equal(*tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
+			if tc.wantRedirectURL != "" {
+				assrt.Equal(tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
 			}
 		})
 	}
