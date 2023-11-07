@@ -206,10 +206,16 @@ func newProxy() (Proxy, error) {
 // variable to force a redirect to clear it from the query string.
 func (p Proxy) getToken(r *http.Request) string {
 	if token := r.URL.Query().Get(p.TokenParam); token != "" {
-		// if we got the token from the query string, set a flag for the Caddyfile to redirect without it
-		p.setVar(r, CaddyVarRedirectURL, r.URL.Path)
+		// if we got the token from the query string, set a URL for the Caddyfile to redirect without it
+		u := r.URL
+		q := u.Query()
+		q.Del(p.TokenParam)
+		u.RawQuery = q.Encode()
+
+		p.setVar(r, CaddyVarRedirectURL, u.String())
 		return token
 	}
+
 	if cookie, err := r.Cookie(p.CookieName); err == nil {
 		return cookie.Value
 	}
