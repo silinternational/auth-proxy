@@ -101,6 +101,74 @@ func Test_AuthProxy(t *testing.T) {
 	}
 }
 
+func Test_getToken(t *testing.T) {
+	assrt := assert.New(t)
+
+	const cookieName = "cookie"
+	secret := []byte("secret")
+	const tokenParam = "token"
+
+	proxy := Proxy{
+		CookieName: cookieName,
+		log:        zap.L(),
+		Secret:     secret,
+		TokenParam: tokenParam,
+	}
+
+	testJWT := makeTestJWT(secret, "good", time.Now().AddDate(0, 0, 1))
+
+	redirectURL := "/"
+
+	tests := []struct {
+		name            string
+		cookie          *http.Cookie
+		query           string
+		want            string
+		wantRedirectURL *string
+	}{
+		{
+			name: "no token",
+			want: "",
+		},
+		{
+			name:            "token in URL param",
+			query:           tokenParam + "=abc123",
+			want:            "abc123",
+			wantRedirectURL: &redirectURL,
+		},
+		{
+			name:   "token in cookie",
+			cookie: makeTestJWTCookie(cookieName, testJWT),
+			want:   testJWT,
+		},
+		{
+			name:            "token in param and cookie",
+			cookie:          makeTestJWTCookie(cookieName, testJWT),
+			query:           tokenParam + "=abc123",
+			want:            "abc123",
+			wantRedirectURL: &redirectURL,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tc.cookie != nil {
+				r.AddCookie(tc.cookie)
+			}
+			ctx := context.WithValue(r.Context(), caddy.CtxKey("vars"), map[string]any{})
+			r = r.WithContext(ctx)
+			r.URL.RawQuery = tc.query
+
+			token := proxy.getToken(r)
+			assrt.Equal(tc.want, token)
+			if tc.wantRedirectURL != nil {
+				assrt.Equal(*tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
+			}
+		})
+	}
+}
+
 func makeTestJWTCookie(name, token string) *http.Cookie {
 	return &http.Cookie{
 		Name:  name,
