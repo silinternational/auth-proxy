@@ -95,7 +95,7 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	if err := p.authRedirect(w, r); err != nil {
+	if err := p.handleRequest(w, r); err != nil {
 		var proxyError *Error
 		if errors.As(err, &proxyError) {
 			w.WriteHeader(proxyError.Status)
@@ -111,7 +111,7 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) error {
+func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	token := p.getToken(r)
 
 	if token == "" {
@@ -127,7 +127,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	} else if err != nil {
 		return &Error{
-			err:     fmt.Errorf("authRedirect failed to parse token: %w", err),
+			err:     fmt.Errorf("handleRequest failed to parse token: %w", err),
 			Message: "error: corrupted access token",
 			Status:  http.StatusBadRequest,
 		}

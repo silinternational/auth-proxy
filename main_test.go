@@ -83,7 +83,7 @@ func Test_AuthProxy(t *testing.T) {
 			r = r.WithContext(ctx)
 
 			var w httptest.ResponseRecorder
-			err := proxy.authRedirect(&w, r)
+			err := proxy.handleRequest(&w, r)
 
 			if tc.wantErr != "" {
 				assert.ErrorContains(err, tc.wantErr)
