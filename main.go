@@ -141,15 +141,15 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	http.SetCookie(w, &ck)
 
-	upstream, err := p.getSite(claim.Level)
-	if err != nil {
-		return err
-	}
-
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
 	if returnTo != "" && p.isTrusted(returnTo) {
 		p.setVar(r, CaddyVarRedirectURL, returnTo)
 		return nil
+	}
+
+	upstream, err := p.getSite(claim.Level)
+	if err != nil {
+		return err
 	}
 
 	p.setVar(r, CaddyVarUpstream, upstream)
