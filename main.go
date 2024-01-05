@@ -52,8 +52,7 @@ type Proxy struct {
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
 
-	claim ProxyClaim  `ignored:"true"`
-	log   *zap.Logger `ignored:"true"`
+	log *zap.Logger `ignored:"true"`
 }
 
 type Error struct {
@@ -118,18 +117,7 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
 		return nil
 	}
 
-	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			err := &Error{
-				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
-				Message: "error: invalid access token",
-				Status:  http.StatusBadRequest,
-			}
-			return nil, err
-		}
-
-		return p.Secret, nil
-	})
+	claim, err := getClaimFromToken(p.Secret, token)
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired, calling management api")
 		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
@@ -145,15 +133,15 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
 	ck := http.Cookie{
 		Name:    p.CookieName,
 		Value:   token,
-		Expires: p.claim.ExpiresAt.Time,
+		Expires: claim.ExpiresAt.Time,
 		Path:    "/",
 	}
 	http.SetCookie(w, &ck)
 
-	upstream, ok := p.Sites[p.claim.Level]
+	upstream, ok := p.Sites[claim.Level]
 	if !ok {
 		return &Error{
-			err:     fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites),
+			err:     fmt.Errorf("auth level '%v' not in sites: %v", claim.Level, p.Sites),
 			Message: "error: unrecognized access level",
 			Status:  http.StatusBadRequest,
 		}
@@ -220,4 +208,22 @@ func (p Proxy) getToken(r *http.Request) string {
 		return cookie.Value
 	}
 	return ""
+}
+
+func getClaimFromToken(secret []byte, token string) (ProxyClaim, error) {
+	var claim ProxyClaim
+	_, err := jwt.ParseWithClaims(token, &claim, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			err := &Error{
+				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
+				Message: "error: invalid access token",
+				Status:  http.StatusBadRequest,
+			}
+			return nil, err
+		}
+
+		return secret, nil
+	})
+
+	return claim, err
 }
