@@ -96,19 +96,22 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 	}
 
 	if err := p.authRedirect(w, r); err != nil {
-		w.WriteHeader(err.Status)
-		_, writeErr := w.Write([]byte(err.Message))
-		if writeErr != nil {
-			p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+		var proxyError *Error
+		if errors.As(err, &proxyError) {
+			w.WriteHeader(proxyError.Status)
+			_, writeErr := w.Write([]byte(proxyError.Message))
+			if writeErr != nil {
+				p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+			}
+			p.log.Error(proxyError.Message, zap.Int("status", proxyError.Status), zap.String("error", err.Error()))
 		}
-		p.log.Error(err.Message, zap.Int("status", err.Status), zap.String("error", err.Error()))
 		return err
 	}
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
+func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) error {
 	token := p.getToken(r)
 
 	if token == "" {
@@ -138,13 +141,9 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
 	}
 	http.SetCookie(w, &ck)
 
-	upstream, ok := p.Sites[claim.Level]
-	if !ok {
-		return &Error{
-			err:     fmt.Errorf("auth level '%v' not in sites: %v", claim.Level, p.Sites),
-			Message: "error: unrecognized access level",
-			Status:  http.StatusBadRequest,
-		}
+	upstream, err := p.getSite(claim.Level)
+	if err != nil {
+		return err
 	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
@@ -208,6 +207,18 @@ func (p Proxy) getToken(r *http.Request) string {
 		return cookie.Value
 	}
 	return ""
+}
+
+func (p Proxy) getSite(level string) (string, error) {
+	upstream, ok := p.Sites[level]
+	if !ok {
+		return "", &Error{
+			err:     fmt.Errorf("auth level '%v' not in sites: %v", level, p.Sites),
+			Message: "error: unrecognized access level",
+			Status:  http.StatusBadRequest,
+		}
+	}
+	return upstream, nil
 }
 
 func getClaimFromToken(secret []byte, token string) (ProxyClaim, error) {
