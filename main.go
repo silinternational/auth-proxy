@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
@@ -33,7 +34,8 @@ func init() {
 }
 
 type ProxyClaim struct {
-	Level string `json:"level"`
+	Level   string `json:"level"`
+	IsValid bool
 	jwt.RegisteredClaims
 }
 
@@ -112,25 +114,34 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 }
 
 func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
-	token := p.getToken(r)
+	qsToken := p.getTokenFromQueryString(r)
+	qsClaim := p.getClaimFromToken(qsToken)
+	cToken := p.getTokenFromCookie(r)
+	cClaim := p.getClaimFromToken(cToken)
 
-	if token == "" {
-		p.log.Info("no token found, calling management api")
+	if !qsClaim.IsValid && !cClaim.IsValid {
+		p.log.Info("no valid token found, calling management api")
 		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 		return nil
 	}
 
-	claim, err := getClaimFromToken(p.Secret, token)
-	if errors.Is(err, jwt.ErrTokenExpired) {
-		p.log.Info("jwt has expired, calling management api")
-		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+	if cToken != "" && qsToken != "" {
+		p.clearQsToken(r)
+		p.log.Info("clearing query string")
 		return nil
-	} else if err != nil {
-		return &Error{
-			err:     fmt.Errorf("handleRequest failed to parse token: %w", err),
-			Message: "error: corrupted access token",
-			Status:  http.StatusBadRequest,
-		}
+	}
+
+	var token string
+	var claim ProxyClaim
+	if qsClaim.IsValid {
+		token = qsToken
+		claim = qsClaim
+	} else if cClaim.IsValid {
+		token = cToken
+		claim = cClaim
+	} else {
+		token = ""
+		claim = ProxyClaim{}
 	}
 
 	ck := http.Cookie{
@@ -189,24 +200,16 @@ func newProxy() (Proxy, error) {
 	return p, nil
 }
 
-// getToken returns a token found in either a cookie or the query string. If found in the query string, set a Caddy
-// variable to force a redirect to clear it from the query string.
-func (p Proxy) getToken(r *http.Request) string {
-	if token := r.URL.Query().Get(p.TokenParam); token != "" {
-		// if we got the token from the query string, set a URL for the Caddyfile to redirect without it
-		u := r.URL
-		q := u.Query()
-		q.Del(p.TokenParam)
-		u.RawQuery = q.Encode()
+func (p Proxy) getTokenFromQueryString(r *http.Request) string {
+	return r.URL.Query().Get(p.TokenParam)
+}
 
-		p.setVar(r, CaddyVarRedirectURL, u.String())
-		return token
+func (p Proxy) getTokenFromCookie(r *http.Request) string {
+	cookie, err := r.Cookie(p.CookieName)
+	if err != nil {
+		return ""
 	}
-
-	if cookie, err := r.Cookie(p.CookieName); err == nil {
-		return cookie.Value
-	}
-	return ""
+	return cookie.Value
 }
 
 func (p Proxy) getSite(level string) (string, error) {
@@ -221,7 +224,34 @@ func (p Proxy) getSite(level string) (string, error) {
 	return upstream, nil
 }
 
-func getClaimFromToken(secret []byte, token string) (ProxyClaim, error) {
+func (p Proxy) clearQsToken(r *http.Request) {
+	u := r.URL
+	q := u.Query()
+	q.Del(p.TokenParam)
+	u.RawQuery = q.Encode()
+
+	p.setVar(r, CaddyVarRedirectURL, u.String())
+}
+
+func (p Proxy) setCookie(w http.ResponseWriter, token string) {
+	ck := http.Cookie{
+		Name:    p.CookieName,
+		Value:   token,
+		Expires: time.Now().AddDate(0, 0, 1),
+		Path:    "/",
+	}
+	http.SetCookie(w, &ck)
+}
+
+func (p Proxy) redirectToManagementAPI(r *http.Request) {
+	p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+}
+
+func (p Proxy) getClaimFromToken(token string) ProxyClaim {
+	if token == "" {
+		return ProxyClaim{}
+	}
+
 	var claim ProxyClaim
 	_, err := jwt.ParseWithClaims(token, &claim, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -233,8 +263,16 @@ func getClaimFromToken(secret []byte, token string) (ProxyClaim, error) {
 			return nil, err
 		}
 
-		return secret, nil
+		return p.Secret, nil
 	})
 
-	return claim, err
+	if errors.Is(err, jwt.ErrTokenExpired) {
+		p.log.Error("jwt token has expired: " + err.Error())
+	} else if err != nil {
+		p.log.Error("failed to parse token: " + err.Error())
+	} else {
+		claim.IsValid = true
+	}
+
+	return claim
 }

@@ -164,7 +164,14 @@ func Test_getToken(t *testing.T) {
 			r = r.WithContext(ctx)
 			r.URL.RawQuery = tc.query
 
-			token := proxy.getToken(r)
+			cToken := proxy.getTokenFromCookie(r)
+			qToken := proxy.getTokenFromQueryString(r)
+			var token string
+			if cToken == "" {
+				token = qToken
+			} else {
+				token = cToken
+			}
 			assrt.Equal(tc.want, token)
 			if tc.wantRedirectURL != "" {
 				assrt.Equal(tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
