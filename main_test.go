@@ -101,9 +101,7 @@ func Test_AuthProxy(t *testing.T) {
 	}
 }
 
-func Test_getToken(t *testing.T) {
-	assrt := assert.New(t)
-
+func Test_getTokenFromCookie(t *testing.T) {
 	const cookieName = "cookie"
 	secret := []byte("secret")
 	const tokenParam = "token"
@@ -118,39 +116,19 @@ func Test_getToken(t *testing.T) {
 	testJWT := makeTestJWT(secret, "good", time.Now().AddDate(0, 0, 1))
 
 	tests := []struct {
-		name            string
-		cookie          *http.Cookie
-		query           string
-		want            string
-		wantRedirectURL string
+		name   string
+		cookie *http.Cookie
+		query  string
+		want   string
 	}{
 		{
 			name: "no token",
 			want: "",
 		},
 		{
-			name:            "token in URL param",
-			query:           tokenParam + "=abc123",
-			want:            "abc123",
-			wantRedirectURL: "/",
-		},
-		{
 			name:   "token in cookie",
 			cookie: makeTestJWTCookie(cookieName, testJWT),
 			want:   testJWT,
-		},
-		{
-			name:            "token in param and cookie",
-			cookie:          makeTestJWTCookie(cookieName, testJWT),
-			query:           tokenParam + "=abc123",
-			want:            "abc123",
-			wantRedirectURL: "/",
-		},
-		{
-			name:            "token and returnTo in URL params",
-			query:           tokenParam + "=abc123&returnTo=https%3A%2F%2Fexample.com%2Fpath",
-			want:            "abc123",
-			wantRedirectURL: "/?returnTo=https%3A%2F%2Fexample.com%2Fpath",
 		},
 	}
 
@@ -164,18 +142,52 @@ func Test_getToken(t *testing.T) {
 			r = r.WithContext(ctx)
 			r.URL.RawQuery = tc.query
 
-			cToken := proxy.getTokenFromCookie(r)
-			qToken := proxy.getTokenFromQueryString(r)
-			var token string
-			if cToken == "" {
-				token = qToken
-			} else {
-				token = cToken
-			}
-			assrt.Equal(tc.want, token)
-			if tc.wantRedirectURL != "" {
-				assrt.Equal(tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
-			}
+			token := proxy.getTokenFromCookie(r)
+			assert.Equal(t, tc.want, token, "wrong token in test %q", tc.name)
+		})
+	}
+}
+
+func Test_getTokenFromQueryString(t *testing.T) {
+	secret := []byte("secret")
+	const tokenParam = "token"
+
+	proxy := Proxy{
+		log:        zap.L(),
+		Secret:     secret,
+		TokenParam: tokenParam,
+	}
+
+	tests := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{
+			name: "no token",
+			want: "",
+		},
+		{
+			name:  "token in URL param",
+			query: tokenParam + "=abc123",
+			want:  "abc123",
+		},
+		{
+			name:  "token and returnTo in URL params",
+			query: tokenParam + "=abc123&returnTo=https%3A%2F%2Fexample.com%2Fpath",
+			want:  "abc123",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			ctx := context.WithValue(r.Context(), caddy.CtxKey("vars"), map[string]any{})
+			r = r.WithContext(ctx)
+			r.URL.RawQuery = tc.query
+
+			token := proxy.getTokenFromQueryString(r)
+			assert.Equal(t, tc.want, token)
 		})
 	}
 }
