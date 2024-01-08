@@ -22,6 +22,10 @@ const (
 	CaddyVarRedirectURL = "redirect_url"
 )
 
+// CookieFlag is a query string flag to indicate a cookie has been requested. It remains set until the requested
+// cookie has been verified. This is required to support user agents that do not allow cookies.
+const CookieFlag = "cf"
+
 // Interface guards
 var (
 	_ caddy.Provisioner           = (*Proxy)(nil)
@@ -125,12 +129,6 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	if cToken != "" && qsToken != "" {
-		p.clearQsToken(r)
-		p.log.Info("clearing query string")
-		return nil
-	}
-
 	var token string
 	var claim ProxyClaim
 	if qsClaim.IsValid {
@@ -144,13 +142,26 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		claim = ProxyClaim{}
 	}
 
-	ck := http.Cookie{
-		Name:    p.CookieName,
-		Value:   token,
-		Expires: claim.ExpiresAt.Time,
-		Path:    "/",
+	flag := p.getFlag(r)
+	if !flag && !cClaim.IsValid {
+		p.log.Info("setting cookie")
+		ck := http.Cookie{
+			Name:    p.CookieName,
+			Value:   token,
+			Expires: claim.ExpiresAt.Time,
+			Path:    "/",
+		}
+		http.SetCookie(w, &ck)
+		p.setFlag(r)
+		return nil
 	}
-	http.SetCookie(w, &ck)
+
+	if flag && cClaim.IsValid {
+		p.log.Info("clearing flag")
+		p.clearQsToken(r)
+		p.clearFlag(r)
+		return nil
+	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
 	if returnTo != "" && p.isTrusted(returnTo) {
@@ -275,4 +286,26 @@ func (p Proxy) getClaimFromToken(token string) ProxyClaim {
 	}
 
 	return claim
+}
+
+func (p Proxy) setFlag(r *http.Request) {
+	u := r.URL
+	q := u.Query()
+	q.Add(CookieFlag, "1")
+	u.RawQuery = q.Encode()
+
+	p.setVar(r, CaddyVarRedirectURL, u.String())
+}
+
+func (p Proxy) clearFlag(r *http.Request) {
+	u := r.URL
+	q := u.Query()
+	q.Del(CookieFlag)
+	u.RawQuery = q.Encode()
+
+	p.setVar(r, CaddyVarRedirectURL, u.String())
+}
+
+func (p Proxy) getFlag(r *http.Request) bool {
+	return r.URL.Query().Get(CookieFlag) != ""
 }
