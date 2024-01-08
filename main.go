@@ -118,12 +118,12 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 }
 
 func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
-	qsToken := p.getTokenFromQueryString(r)
-	qsClaim := p.getClaimFromToken(qsToken)
-	cToken := p.getTokenFromCookie(r)
-	cClaim := p.getClaimFromToken(cToken)
+	queryToken := p.getTokenFromQueryString(r)
+	queryClaim := p.getClaimFromToken(queryToken)
+	cookieToken := p.getTokenFromCookie(r)
+	cookieClaim := p.getClaimFromToken(cookieToken)
 
-	if !qsClaim.IsValid && !cClaim.IsValid {
+	if !queryClaim.IsValid && !cookieClaim.IsValid {
 		p.log.Info("no valid token found, calling management api")
 		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 		return nil
@@ -131,19 +131,19 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 
 	var token string
 	var claim ProxyClaim
-	if qsClaim.IsValid {
-		token = qsToken
-		claim = qsClaim
-	} else if cClaim.IsValid {
-		token = cToken
-		claim = cClaim
+	if queryClaim.IsValid {
+		token = queryToken
+		claim = queryClaim
+	} else if cookieClaim.IsValid {
+		token = cookieToken
+		claim = cookieClaim
 	} else {
 		token = ""
 		claim = ProxyClaim{}
 	}
 
 	flag := p.getFlag(r)
-	if !flag && !cClaim.IsValid {
+	if !flag && !cookieClaim.IsValid {
 		p.log.Info("setting cookie")
 		ck := http.Cookie{
 			Name:    p.CookieName,
@@ -156,7 +156,7 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	if flag && cClaim.IsValid {
+	if flag && cookieClaim.IsValid {
 		p.log.Info("clearing flag")
 		p.clearQsToken(r)
 		p.clearFlag(r)
