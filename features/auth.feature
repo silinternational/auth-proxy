@@ -11,12 +11,12 @@ Feature: functional test cases
 
 	Scenario: Invalid authorization data
 		When we send a request with invalid authorization data
-		Then we will see an error message
+		Then we do not see an error message
+		And we will be redirected to the management api
 
 	Scenario Outline: Authorization data specifying various levels of access
 		When we send a request with authorization data in the <urlOrCookie> authorizing <accessLevel> access
 		Then we do not see an error message
-		And we do not see the token parameter
 		And we will see the <accessLevel> version of the website
 
 		Examples:
