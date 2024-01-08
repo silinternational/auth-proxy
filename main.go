@@ -144,14 +144,7 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 
 	flag := p.getFlag(r)
 	if !flag && !cookieClaim.IsValid {
-		p.log.Info("setting cookie")
-		ck := http.Cookie{
-			Name:    p.CookieName,
-			Value:   token,
-			Expires: claim.ExpiresAt.Time,
-			Path:    "/",
-		}
-		http.SetCookie(w, &ck)
+		p.setCookie(w, token, claim.ExpiresAt.Time)
 		p.setFlag(r)
 		return nil
 	}
@@ -244,11 +237,11 @@ func (p Proxy) clearQsToken(r *http.Request) {
 	p.setVar(r, CaddyVarRedirectURL, u.String())
 }
 
-func (p Proxy) setCookie(w http.ResponseWriter, token string) {
+func (p Proxy) setCookie(w http.ResponseWriter, token string, expiry time.Time) {
 	ck := http.Cookie{
 		Name:    p.CookieName,
 		Value:   token,
-		Expires: time.Now().AddDate(0, 0, 1),
+		Expires: expiry,
 		Path:    "/",
 	}
 	http.SetCookie(w, &ck)
