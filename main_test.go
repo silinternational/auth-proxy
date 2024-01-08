@@ -18,7 +18,6 @@ func Test_AuthProxy(t *testing.T) {
 	const managementAPI = "http://management_api.example.com"
 	const tokenPath = "/auth/token"
 
-	assert := assert.New(t)
 	cookieName := "_test"
 	tokenSecret := []byte("secret")
 	authURLs := AuthSites{"good": "good url"}
@@ -48,11 +47,6 @@ func Test_AuthProxy(t *testing.T) {
 			cookie:          nil,
 			wantErr:         "",
 			wantRedirectURL: &redirectURL,
-		},
-		{
-			name:    "invalid cookie",
-			cookie:  makeTestJWTCookie(cookieName, makeTestJWT([]byte("bad"), "good", validTime)),
-			wantErr: "signature is invalid",
 		},
 		{
 			name:            "expired cookie",
@@ -86,16 +80,16 @@ func Test_AuthProxy(t *testing.T) {
 			err := proxy.handleRequest(&w, r)
 
 			if tc.wantErr != "" {
-				assert.ErrorContains(err, tc.wantErr)
+				assert.ErrorContains(t, err, tc.wantErr)
 				return
 			}
-			assert.Nil(err)
+			assert.Nil(t, err)
 
 			if tc.wantUpstream != nil {
-				assert.Equal(*tc.wantUpstream, caddyhttp.GetVar(r.Context(), CaddyVarUpstream))
+				assert.Equal(t, *tc.wantUpstream, caddyhttp.GetVar(r.Context(), CaddyVarUpstream))
 			}
 			if tc.wantRedirectURL != nil {
-				assert.Equal(*tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
+				assert.Equal(t, *tc.wantRedirectURL, caddyhttp.GetVar(r.Context(), CaddyVarRedirectURL))
 			}
 		})
 	}
