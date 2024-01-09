@@ -137,9 +137,6 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	} else if cookieClaim.IsValid {
 		token = cookieToken
 		claim = cookieClaim
-	} else {
-		token = ""
-		claim = ProxyClaim{}
 	}
 
 	flag := p.getFlag(r)
