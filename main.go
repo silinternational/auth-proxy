@@ -148,7 +148,7 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 
 	if flag && cookieClaim.IsValid {
 		p.log.Info("clearing flag")
-		p.clearQsToken(r)
+		p.clearQueryToken(r)
 		p.clearFlag(r)
 		return nil
 	}
@@ -225,7 +225,7 @@ func (p Proxy) getSite(level string) (string, error) {
 	return upstream, nil
 }
 
-func (p Proxy) clearQsToken(r *http.Request) {
+func (p Proxy) clearQueryToken(r *http.Request) {
 	u := r.URL
 	q := u.Query()
 	q.Del(p.TokenParam)
