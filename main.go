@@ -52,8 +52,7 @@ type Proxy struct {
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
 
-	claim ProxyClaim  `ignored:"true"`
-	log   *zap.Logger `ignored:"true"`
+	log *zap.Logger `ignored:"true"`
 }
 
 type Error struct {
@@ -96,20 +95,23 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	if err := p.authRedirect(w, r); err != nil {
-		w.WriteHeader(err.Status)
-		_, writeErr := w.Write([]byte(err.Message))
-		if writeErr != nil {
-			p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+	if err := p.handleRequest(w, r); err != nil {
+		var proxyError *Error
+		if errors.As(err, &proxyError) {
+			w.WriteHeader(proxyError.Status)
+			_, writeErr := w.Write([]byte(proxyError.Message))
+			if writeErr != nil {
+				p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+			}
+			p.log.Error(proxyError.Message, zap.Int("status", proxyError.Status), zap.String("error", err.Error()))
 		}
-		p.log.Error(err.Message, zap.Int("status", err.Status), zap.String("error", err.Error()))
 		return err
 	}
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
+func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	token := p.getToken(r)
 
 	if token == "" {
@@ -118,25 +120,14 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
 		return nil
 	}
 
-	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			err := &Error{
-				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
-				Message: "error: invalid access token",
-				Status:  http.StatusBadRequest,
-			}
-			return nil, err
-		}
-
-		return p.Secret, nil
-	})
+	claim, err := getClaimFromToken(p.Secret, token)
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Info("jwt has expired, calling management api")
 		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 		return nil
 	} else if err != nil {
 		return &Error{
-			err:     fmt.Errorf("authRedirect failed to parse token: %w", err),
+			err:     fmt.Errorf("handleRequest failed to parse token: %w", err),
 			Message: "error: corrupted access token",
 			Status:  http.StatusBadRequest,
 		}
@@ -145,24 +136,20 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
 	ck := http.Cookie{
 		Name:    p.CookieName,
 		Value:   token,
-		Expires: p.claim.ExpiresAt.Time,
+		Expires: claim.ExpiresAt.Time,
 		Path:    "/",
 	}
 	http.SetCookie(w, &ck)
-
-	upstream, ok := p.Sites[p.claim.Level]
-	if !ok {
-		return &Error{
-			err:     fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites),
-			Message: "error: unrecognized access level",
-			Status:  http.StatusBadRequest,
-		}
-	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
 	if returnTo != "" && p.isTrusted(returnTo) {
 		p.setVar(r, CaddyVarRedirectURL, returnTo)
 		return nil
+	}
+
+	upstream, err := p.getSite(claim.Level)
+	if err != nil {
+		return err
 	}
 
 	p.setVar(r, CaddyVarUpstream, upstream)
@@ -220,4 +207,34 @@ func (p Proxy) getToken(r *http.Request) string {
 		return cookie.Value
 	}
 	return ""
+}
+
+func (p Proxy) getSite(level string) (string, error) {
+	upstream, ok := p.Sites[level]
+	if !ok {
+		return "", &Error{
+			err:     fmt.Errorf("auth level '%v' not in sites: %v", level, p.Sites),
+			Message: "error: unrecognized access level",
+			Status:  http.StatusBadRequest,
+		}
+	}
+	return upstream, nil
+}
+
+func getClaimFromToken(secret []byte, token string) (ProxyClaim, error) {
+	var claim ProxyClaim
+	_, err := jwt.ParseWithClaims(token, &claim, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			err := &Error{
+				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
+				Message: "error: invalid access token",
+				Status:  http.StatusBadRequest,
+			}
+			return nil, err
+		}
+
+		return secret, nil
+	})
+
+	return claim, err
 }
