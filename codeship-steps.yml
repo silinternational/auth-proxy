@@ -1,6 +1,6 @@
 - name: test
   service: test
-  command: /src/run-tests.sh
+  command: go test ./...
 
 - name: push_develop
   service: testapp
