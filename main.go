@@ -51,6 +51,7 @@ type Proxy struct {
 
 	// optional params
 	CookieName    string `default:"_auth_proxy" split_words:"true"`
+	LogLevel      string `default:"info" split_words:"true"`
 	ReturnToParam string `default:"returnTo" split_words:"true"`
 	TokenParam    string `default:"token" split_words:"true"`
 	TokenPath     string `default:"/auth/token" split_words:"true"`
@@ -84,7 +85,12 @@ func (Proxy) CaddyModule() caddy.ModuleInfo {
 }
 
 func (p *Proxy) Provision(ctx caddy.Context) error {
-	p.log = ctx.Logger(p)
+	level, err := zap.ParseAtomicLevel(p.LogLevel)
+	if err != nil {
+		return fmt.Errorf("invalid log level: %s", p.LogLevel)
+	}
+
+	p.log = ctx.Logger(p).WithOptions(zap.IncreaseLevel(level))
 	return nil
 }
 
