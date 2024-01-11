@@ -2,10 +2,8 @@ package proxy
 
 import (
 	"context"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
