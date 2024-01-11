@@ -150,11 +150,20 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	if flag && cookieClaim.IsValid {
-		p.log.Info("clearing flag")
-		p.clearQueryToken(r)
-		p.clearFlag(r)
-		return nil
+	// if the cookie is valid, it's safe to clear the query string
+	if cookieClaim.IsValid {
+		redirect := false
+		if queryToken != "" {
+			p.clearQueryToken(r)
+			redirect = true
+		}
+		if flag {
+			p.clearFlag(r)
+			redirect = true
+		}
+		if redirect {
+			return nil
+		}
 	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
