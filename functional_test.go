@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
 	"testing"
@@ -86,7 +87,8 @@ func sendRequest(url string, c *http.Cookie) error {
 func weSendARequestWithAuthorizationDataAuthorizingAccess(where, level string) error {
 	var c *http.Cookie
 	url := p.Host
-	token := makeTestJWT(p.Secret, level, time.Now().AddDate(0, 0, 1))
+	expires := time.Now().Add(1000 + time.Second*time.Duration(rand.Intn(1000)))
+	token := makeTestJWT(p.Secret, level, expires)
 
 	if where == "cookie" {
 		c = makeTestJWTCookie(p.CookieName, token)

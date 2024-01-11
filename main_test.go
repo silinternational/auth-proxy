@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"context"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -20,7 +22,7 @@ func Test_AuthProxy(t *testing.T) {
 
 	cookieName := "_test"
 	tokenSecret := []byte("secret")
-	authURLs := AuthSites{"good": "good url"}
+	authURLs := AuthSites{"site1": "site1.example.com", "site2": "site2.example.com"}
 	validTime := time.Now().AddDate(0, 0, 1)
 	expiredTime := time.Now().AddDate(0, 0, -1)
 	proxy := Proxy{
@@ -30,46 +32,73 @@ func Test_AuthProxy(t *testing.T) {
 		log:           zap.L(),
 		ManagementAPI: managementAPI,
 		TokenPath:     tokenPath,
+		TokenParam:    "token",
 	}
 
-	redirectURL := managementAPI + tokenPath + "?returnTo=%2F"
-	upstream := authURLs["good"]
+	token1 := makeTestJWT(tokenSecret, "site1", validTime)
+	token2 := makeTestJWT(tokenSecret, "site2", validTime.Add(time.Minute))
+
+	ptr := func(s string) *string { return &s }
 
 	tests := []struct {
 		name            string
+		url             string
 		cookie          *http.Cookie
 		wantErr         string
 		wantRedirectURL *string
 		wantUpstream    *string
 	}{
 		{
-			name:            "no cookie",
+			name:            "no token -- redirect to API",
+			url:             "/",
 			cookie:          nil,
-			wantErr:         "",
-			wantRedirectURL: &redirectURL,
+			wantRedirectURL: ptr(managementAPI + tokenPath + "?returnTo=%2F"),
 		},
 		{
-			name:            "expired cookie",
-			cookie:          makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", expiredTime)),
-			wantErr:         "",
-			wantRedirectURL: &redirectURL,
+			name:            "expired cookie -- redirect to API",
+			url:             "/",
+			cookie:          makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "site1", expiredTime)),
+			wantRedirectURL: ptr(managementAPI + tokenPath + "?returnTo=%2F"),
 		},
 		{
 			name:    "invalid level",
+			url:     "/",
 			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "bad", validTime)),
 			wantErr: "not in sites",
 		},
 		{
-			name:         "valid",
-			cookie:       makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "good", validTime)),
-			wantErr:      "",
-			wantUpstream: &upstream,
+			name:            "query valid -- redirect to set cookie",
+			url:             "/?token=" + token1,
+			wantRedirectURL: ptr("/?cf=1&token=" + token1),
+		},
+		{
+			name:         "query valid with flag but no cookie -- use query token",
+			url:          "/?cf=1&token=" + token1,
+			wantUpstream: ptr(authURLs["site1"]),
+		},
+		{
+			name:         "cookie valid",
+			url:          "/",
+			cookie:       makeTestJWTCookie(cookieName, token1),
+			wantUpstream: ptr(authURLs["site1"]),
+		},
+		{
+			name:            "query and cookie valid and same -- redirect without query token",
+			url:             "/?token=" + token1,
+			cookie:          makeTestJWTCookie(cookieName, token1),
+			wantRedirectURL: ptr("/"),
+		},
+		{
+			name:            "query and cookie valid but different -- redirect to set cookie",
+			url:             "/?token=" + token1,
+			cookie:          makeTestJWTCookie(cookieName, token2),
+			wantRedirectURL: ptr("/?cf=1&token=" + token1),
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r := httptest.NewRequest(http.MethodGet, tc.url, nil)
 			if tc.cookie != nil {
 				r.AddCookie(tc.cookie)
 			}
