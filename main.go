@@ -139,18 +139,31 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		claim = cookieClaim
 	}
 
+	// if a cookie hasn't been requested, try to set one
 	flag := p.getFlag(r)
-	if !flag && !cookieClaim.IsValid {
-		p.setCookie(w, token, claim.ExpiresAt.Time)
-		p.setFlag(r)
-		return nil
+	if !flag {
+		// set a cookie if we don't have a valid one OR if we need to replace it with a new one
+		if !cookieClaim.IsValid || claimsAreValidAndDifferent(queryClaim, cookieClaim) {
+			p.setCookie(w, token, claim.ExpiresAt.Time)
+			p.setFlag(r)
+			return nil
+		}
 	}
 
-	if flag && cookieClaim.IsValid {
-		p.log.Info("clearing flag")
-		p.clearQueryToken(r)
-		p.clearFlag(r)
-		return nil
+	// if the cookie is valid, it's safe to clear the query string
+	if cookieClaim.IsValid {
+		redirect := false
+		if queryToken != "" {
+			p.clearQueryToken(r)
+			redirect = true
+		}
+		if flag {
+			p.clearFlag(r)
+			redirect = true
+		}
+		if redirect {
+			return nil
+		}
 	}
 
 	returnTo := r.URL.Query().Get(p.ReturnToParam)
@@ -298,4 +311,8 @@ func (p Proxy) clearFlag(r *http.Request) {
 
 func (p Proxy) getFlag(r *http.Request) bool {
 	return r.URL.Query().Get(CookieFlag) != ""
+}
+
+func claimsAreValidAndDifferent(a, b ProxyClaim) bool {
+	return a.IsValid && b.IsValid && !a.IssuedAt.Time.Equal(b.IssuedAt.Time)
 }
