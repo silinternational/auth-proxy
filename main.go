@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
@@ -21,6 +22,10 @@ const (
 	CaddyVarRedirectURL = "redirect_url"
 )
 
+// CookieFlag is a query string flag to indicate a cookie has been requested. It remains set until the requested
+// cookie has been verified. This is required to support user agents that do not allow cookies.
+const CookieFlag = "cf"
+
 // Interface guards
 var (
 	_ caddy.Provisioner           = (*Proxy)(nil)
@@ -33,7 +38,8 @@ func init() {
 }
 
 type ProxyClaim struct {
-	Level string `json:"level"`
+	Level   string `json:"level"`
+	IsValid bool
 	jwt.RegisteredClaims
 }
 
@@ -52,8 +58,7 @@ type Proxy struct {
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
 
-	claim ProxyClaim  `ignored:"true"`
-	log   *zap.Logger `ignored:"true"`
+	log *zap.Logger `ignored:"true"`
 }
 
 type Error struct {
@@ -96,66 +101,68 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		return nil
 	}
 
-	if err := p.authRedirect(w, r); err != nil {
-		w.WriteHeader(err.Status)
-		_, writeErr := w.Write([]byte(err.Message))
-		if writeErr != nil {
-			p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+	if err := p.handleRequest(w, r); err != nil {
+		var proxyError *Error
+		if errors.As(err, &proxyError) {
+			w.WriteHeader(proxyError.Status)
+			_, writeErr := w.Write([]byte(proxyError.Message))
+			if writeErr != nil {
+				p.log.Error("couldn't write to response buffer: %s" + writeErr.Error())
+			}
+			p.log.Error(proxyError.Message, zap.Int("status", proxyError.Status), zap.String("error", err.Error()))
 		}
-		p.log.Error(err.Message, zap.Int("status", err.Status), zap.String("error", err.Error()))
 		return err
 	}
 
 	return next.ServeHTTP(w, r)
 }
 
-func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
-	token := p.getToken(r)
+func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
+	queryToken := p.getTokenFromQueryString(r)
+	queryClaim := p.getClaimFromToken(queryToken)
+	cookieToken := p.getTokenFromCookie(r)
+	cookieClaim := p.getClaimFromToken(cookieToken)
 
-	if token == "" {
-		p.log.Info("no token found, calling management api")
+	if !queryClaim.IsValid && !cookieClaim.IsValid {
+		p.log.Info("no valid token found, calling management api")
 		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 		return nil
 	}
 
-	_, err := jwt.ParseWithClaims(token, &p.claim, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			err := &Error{
-				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
-				Message: "error: invalid access token",
-				Status:  http.StatusBadRequest,
-			}
-			return nil, err
-		}
+	var token string
+	var claim ProxyClaim
+	if queryClaim.IsValid {
+		token = queryToken
+		claim = queryClaim
+	} else if cookieClaim.IsValid {
+		token = cookieToken
+		claim = cookieClaim
+	}
 
-		return p.Secret, nil
-	})
-	if errors.Is(err, jwt.ErrTokenExpired) {
-		p.log.Info("jwt has expired, calling management api")
-		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
-		return nil
-	} else if err != nil {
-		return &Error{
-			err:     fmt.Errorf("authRedirect failed to parse token: %w", err),
-			Message: "error: corrupted access token",
-			Status:  http.StatusBadRequest,
+	// if a cookie hasn't been requested, try to set one
+	flag := p.getFlag(r)
+	if !flag {
+		// set a cookie if we don't have a valid one OR if we need to replace it with a new one
+		if !cookieClaim.IsValid || claimsAreValidAndDifferent(queryClaim, cookieClaim) {
+			p.setCookie(w, token, claim.ExpiresAt.Time)
+			p.setFlag(r)
+			return nil
 		}
 	}
 
-	ck := http.Cookie{
-		Name:    p.CookieName,
-		Value:   token,
-		Expires: p.claim.ExpiresAt.Time,
-		Path:    "/",
-	}
-	http.SetCookie(w, &ck)
-
-	upstream, ok := p.Sites[p.claim.Level]
-	if !ok {
-		return &Error{
-			err:     fmt.Errorf("auth level '%v' not in sites: %v", p.claim.Level, p.Sites),
-			Message: "error: unrecognized access level",
-			Status:  http.StatusBadRequest,
+	// if the cookie is valid, it's safe to clear the query string
+	if cookieClaim.IsValid {
+		redirect := false
+		if queryToken != "" {
+			p.clearQueryToken(r)
+			redirect = true
+		}
+		if flag {
+			p.clearFlag(r)
+			redirect = true
+		}
+		if redirect {
+			return nil
 		}
 	}
 
@@ -163,6 +170,11 @@ func (p Proxy) authRedirect(w http.ResponseWriter, r *http.Request) *Error {
 	if returnTo != "" && p.isTrusted(returnTo) {
 		p.setVar(r, CaddyVarRedirectURL, returnTo)
 		return nil
+	}
+
+	upstream, err := p.getSite(claim.Level)
+	if err != nil {
+		return err
 	}
 
 	p.setVar(r, CaddyVarUpstream, upstream)
@@ -202,22 +214,105 @@ func newProxy() (Proxy, error) {
 	return p, nil
 }
 
-// getToken returns a token found in either a cookie or the query string. If found in the query string, set a Caddy
-// variable to force a redirect to clear it from the query string.
-func (p Proxy) getToken(r *http.Request) string {
-	if token := r.URL.Query().Get(p.TokenParam); token != "" {
-		// if we got the token from the query string, set a URL for the Caddyfile to redirect without it
-		u := r.URL
-		q := u.Query()
-		q.Del(p.TokenParam)
-		u.RawQuery = q.Encode()
+func (p Proxy) getTokenFromQueryString(r *http.Request) string {
+	return r.URL.Query().Get(p.TokenParam)
+}
 
-		p.setVar(r, CaddyVarRedirectURL, u.String())
-		return token
+func (p Proxy) getTokenFromCookie(r *http.Request) string {
+	cookie, err := r.Cookie(p.CookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+func (p Proxy) getSite(level string) (string, error) {
+	upstream, ok := p.Sites[level]
+	if !ok {
+		return "", &Error{
+			err:     fmt.Errorf("auth level '%v' not in sites: %v", level, p.Sites),
+			Message: "error: unrecognized access level",
+			Status:  http.StatusBadRequest,
+		}
+	}
+	return upstream, nil
+}
+
+func (p Proxy) clearQueryToken(r *http.Request) {
+	u := r.URL
+	q := u.Query()
+	q.Del(p.TokenParam)
+	u.RawQuery = q.Encode()
+
+	p.setVar(r, CaddyVarRedirectURL, u.String())
+}
+
+func (p Proxy) setCookie(w http.ResponseWriter, token string, expiry time.Time) {
+	ck := http.Cookie{
+		Name:    p.CookieName,
+		Value:   token,
+		Expires: expiry,
+		Path:    "/",
+	}
+	http.SetCookie(w, &ck)
+}
+
+func (p Proxy) redirectToManagementAPI(r *http.Request) {
+	p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+}
+
+func (p Proxy) getClaimFromToken(token string) ProxyClaim {
+	if token == "" {
+		return ProxyClaim{}
 	}
 
-	if cookie, err := r.Cookie(p.CookieName); err == nil {
-		return cookie.Value
+	var claim ProxyClaim
+	_, err := jwt.ParseWithClaims(token, &claim, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			err := &Error{
+				err:     fmt.Errorf("unexpected signing method: %v", token.Header["alg"]),
+				Message: "error: invalid access token",
+				Status:  http.StatusBadRequest,
+			}
+			return nil, err
+		}
+
+		return p.Secret, nil
+	})
+
+	if errors.Is(err, jwt.ErrTokenExpired) {
+		p.log.Error("jwt token has expired: " + err.Error())
+	} else if err != nil {
+		p.log.Error("failed to parse token: " + err.Error())
+	} else {
+		claim.IsValid = true
 	}
-	return ""
+
+	return claim
+}
+
+func (p Proxy) setFlag(r *http.Request) {
+	u := r.URL
+	q := u.Query()
+	q.Add(CookieFlag, "1")
+	u.RawQuery = q.Encode()
+
+	p.setVar(r, CaddyVarRedirectURL, u.String())
+}
+
+func (p Proxy) clearFlag(r *http.Request) {
+	u := r.URL
+	q := u.Query()
+	q.Del(CookieFlag)
+	u.RawQuery = q.Encode()
+
+	p.setVar(r, CaddyVarRedirectURL, u.String())
+}
+
+func (p Proxy) getFlag(r *http.Request) bool {
+	return r.URL.Query().Get(CookieFlag) != ""
+}
+
+func claimsAreValidAndDifferent(a, b ProxyClaim) bool {
+	return a.IsValid && b.IsValid && !a.IssuedAt.Time.Equal(b.IssuedAt.Time)
 }
