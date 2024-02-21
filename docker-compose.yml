@@ -16,7 +16,9 @@ services:
       - "53060:80"
       - "53061:443"
       - "53062:2019"
-    env_file: local.env
+    env_file:
+      - path: local.env
+        required: false
     volumes:
       - ./:/app
       - go-build:/root/.cache/go-build
