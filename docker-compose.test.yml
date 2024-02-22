@@ -1,5 +1,6 @@
 version: "3.7"
 
+# Use extension fields, see https://docs.docker.com/compose/compose-file/11-extension/
 x-common-variables: &test-variables
   HOST: http://testapp
   COOKIE_NAME: _proxy
