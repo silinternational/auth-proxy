@@ -1,5 +1,8 @@
 version: "3.7"
 
+include:
+  - docker-compose.test.yml
+
 services:
   app:
     build:
@@ -14,66 +17,3 @@ services:
       - ./:/app
       - go-build:/root/.cache/go-build
       - go-mod:/go/pkg/mod
-
-  testapp:
-    build:
-      context: .
-      dockerfile: Dockerfile-dev
-    ports:
-      - "53063:80"
-    env_file: test.env
-    volumes:
-      - ./:/app
-
-  test:
-    build:
-      context: .
-      dockerfile: Dockerfile-test
-    env_file: test.env
-    volumes:
-      - .:/src
-      - go-build:/root/.cache/go-build
-      - go-mod:/go/pkg/mod
-    working_dir: /src
-    depends_on:
-      - testapp
-      - fakemanagementapi
-      - server1
-      - server2
-      - server3
-
-  fakemanagementapi:
-    image: caddy:2
-    environment:
-      SERVER: API
-    volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
-    command: caddy run
-
-  server1:
-    image: caddy:2
-    environment:
-      SERVER: server1
-    volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
-    command: caddy run
-
-  server2:
-    image: caddy:2
-    environment:
-      SERVER: server2
-    volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
-    command: caddy run
-
-  server3:
-    image: caddy:2
-    environment:
-      SERVER: server3
-    volumes:
-      - ./Caddyfile-test:/srv/Caddyfile
-    command: caddy run
-
-volumes:
-  go-build: {}
-  go-mod: {}
