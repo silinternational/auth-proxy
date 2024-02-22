@@ -11,7 +11,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Run tests
-        run: docker-compose run --rm test ./run-tests.sh
+        run: docker-compose -f docker-compose.test.yml run --rm test ./run-tests.sh
 
   build-and-publish:
     name: Build and Publish

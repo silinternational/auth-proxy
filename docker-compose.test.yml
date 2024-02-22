@@ -1,0 +1,72 @@
+version: "3.7"
+
+x-common-variables: &test-variables
+  HOST: http://testapp
+  COOKIE_NAME: _proxy
+  TOKEN_SECRET: Rm9yIEdvZCBzbyBsb3ZlZCB0aGUgd29ybGQgdGhhdCBoZSBnYXZlIGhpcyBvbmUgYW5kIG9ubHkgU29uLCB0aGF0IHdob2V2ZXIgYmVsaWV2ZXMgaW4gaGltIHNoYWxsIG5vdCBwZXJpc2ggYnV0IGhhdmUgZXRlcm5hbCBsaWZlLiAtIEpvaG4gMzoxNg==
+  SITES: one:server1:80,two:server2:80,three:server3:80
+  MANAGEMENT_API: http://fakemanagementapi:80
+
+services:
+  testapp:
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
+    ports:
+      - "53063:80"
+    environment: *test-variables
+    volumes:
+      - ./:/app
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile-test
+    depends_on:
+      - testapp
+      - fakemanagementapi
+      - server1
+      - server2
+      - server3
+    environment: *test-variables
+    volumes:
+      - .:/src
+      - go-build:/root/.cache/go-build
+      - go-mod:/go/pkg/mod
+    working_dir: /src
+
+  fakemanagementapi:
+    image: caddy:2
+    environment:
+      SERVER: API
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
+
+  server1:
+    image: caddy:2
+    environment:
+      SERVER: server1
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
+
+  server2:
+    image: caddy:2
+    environment:
+      SERVER: server2
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
+
+  server3:
+    image: caddy:2
+    environment:
+      SERVER: server3
+    volumes:
+      - ./Caddyfile-test:/srv/Caddyfile
+    command: caddy run
+
+volumes:
+  go-build: {}
+  go-mod: {}
