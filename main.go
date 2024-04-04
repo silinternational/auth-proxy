@@ -50,10 +50,11 @@ type Proxy struct {
 	ManagementAPI string    `required:"true" split_words:"true"`
 
 	// optional params
-	CookieName    string `default:"_auth_proxy" split_words:"true"`
-	ReturnToParam string `default:"returnTo" split_words:"true"`
-	TokenParam    string `default:"token" split_words:"true"`
-	TokenPath     string `default:"/auth/token" split_words:"true"`
+	CookieName       string `default:"_auth_proxy" split_words:"true"`
+	ReturnToParam    string `default:"returnTo" split_words:"true"`
+	RobotsTxtDisable bool   `default:"false" split_words:"true"`
+	TokenParam       string `default:"token" split_words:"true"`
+	TokenPath        string `default:"/auth/token" split_words:"true"`
 
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
@@ -89,11 +90,13 @@ func (p *Proxy) Provision(ctx caddy.Context) error {
 }
 
 func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
-	// setup the robots.txt options
-	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
-	if r.URL.Path == "/robots.txt" {
-		w.Write([]byte("User-agent: * Disallow: /"))
-		return nil
+	if !p.RobotsTxtDisable {
+		// setup the robots.txt options
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+		if r.URL.Path == "/robots.txt" {
+			w.Write([]byte("User-agent: * Disallow: /"))
+			return nil
+		}
 	}
 
 	if r.URL.Path == "/status" {
