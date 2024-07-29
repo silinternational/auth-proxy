@@ -18,17 +18,28 @@ services:
     environment: *test-variables
     volumes:
       - ./:/app
+    healthcheck:
+      test: nc -vz localhost 80
+      start_period: 1s
+      interval: 1s
+      timeout: 1s
+      retries: 90
 
   test:
     build:
       context: .
       dockerfile: Dockerfile-test
     depends_on:
-      - testapp
-      - fakemanagementapi
-      - server1
-      - server2
-      - server3
+      testapp:
+        condition: service_healthy
+      fakemanagementapi:
+        condition: service_started
+      server1:
+        condition: service_started
+      server2:
+        condition: service_started
+      server3:
+        condition: service_started
     environment: *test-variables
     volumes:
       - .:/src
