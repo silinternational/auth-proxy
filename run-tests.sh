@@ -3,8 +3,6 @@
 RED='\033[0;31m'
 RESET='\033[0m'
 
-# FIXME: need to wait for the `testapp` container to be ready for connections
-
 go test -v ./...
 
 exit_code=$?
