@@ -94,7 +94,10 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 		// setup the robots.txt options
 		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		if r.URL.Path == "/robots.txt" {
-			w.Write([]byte("User-agent: * Disallow: /"))
+			_, err := w.Write([]byte("User-agent: * Disallow: /"))
+			if err != nil {
+				return fmt.Errorf("failed to write robots.txt: %w", err)
+			}
 			return nil
 		}
 	}
@@ -258,10 +261,6 @@ func (p Proxy) setCookie(w http.ResponseWriter, token string, expiry time.Time) 
 		Path:    "/",
 	}
 	http.SetCookie(w, &ck)
-}
-
-func (p Proxy) redirectToManagementAPI(r *http.Request) {
-	p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 }
 
 func (p Proxy) getClaimFromToken(token string) ProxyClaim {
