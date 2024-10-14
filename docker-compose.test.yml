@@ -22,7 +22,7 @@ services:
       start_period: 1s
       interval: 1s
       timeout: 1s
-      retries: 90
+      retries: 120
 
   test:
     build:
