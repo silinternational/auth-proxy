@@ -5,4 +5,7 @@ COPY . .
 
 COPY --from=cosmtrek/air /go/bin/air /go/bin/
 
+# run the first build in the image so the first container runtime build is faster
+RUN xcaddy build --with github.com/silinternational/auth-proxy=./
+
 CMD air

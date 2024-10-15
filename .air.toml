@@ -2,7 +2,8 @@ root = "."
 tmp_dir = "/tmp"
 
 [build]
-bin = "caddy run"
+bin = "caddy"
+args_bin = ["run"]
 cmd = "xcaddy build --with github.com/silinternational/auth-proxy=./"
 delay = 1000
 exclude_dir = ["tmp"]

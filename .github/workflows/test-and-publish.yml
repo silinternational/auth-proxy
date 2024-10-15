@@ -2,7 +2,7 @@ name: Test and Publish
 
 on:
   push:
-    branches: ['main'] #Trigger on the main branch
+    branches: [ '*' ]
     tags: [ 'v[0-9]+.[0-9]+.[0-9]+' ]  # Trigger on version tags like 'v0.1.2'
 
 jobs:
@@ -23,6 +23,7 @@ jobs:
     name: Build and Publish
     needs: test-app
     runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,7 +40,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
