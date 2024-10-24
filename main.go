@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -129,14 +131,26 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	cookieToken := p.getTokenFromCookie(r)
 	cookieClaim := p.getClaimFromToken(cookieToken)
 
-	if !queryClaim.IsValid && !cookieClaim.IsValid {
-		p.log.Info("no valid token found, calling management api")
-		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
-		return nil
-	}
-
 	var token string
 	var claim ProxyClaim
+
+	if !queryClaim.IsValid && !cookieClaim.IsValid {
+		p.log.Info("no valid token found, calling management API")
+		ipAddr, err := getRequestIPAddress(r)
+		if err != nil {
+			p.log.Error("failed to get request IP address", zap.Error(err))
+		} else {
+			token = p.getTokenFromAPI(ipAddr)
+			claim = p.getClaimFromToken(token)
+
+			if !claim.IsValid {
+				p.log.Info("last resort, redirecting to management API")
+				p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+				return nil
+			}
+		}
+	}
+
 	if queryClaim.IsValid {
 		token = queryToken
 		claim = queryClaim
@@ -315,6 +329,48 @@ func (p Proxy) getFlag(r *http.Request) bool {
 	return r.URL.Query().Get(CookieFlag) != ""
 }
 
+func (p Proxy) getTokenFromAPI(ipAddress string) string {
+	client := &http.Client{Timeout: time.Second * 10}
+	req, err := http.NewRequest("GET", p.ManagementAPI+p.TokenPath, nil)
+	if err != nil {
+		p.log.Error("error creating management API request", zap.Error(err))
+		return ""
+	}
+
+	req.Header.Add("X-Auth-Proxy-Client-Ip", ipAddress)
+	resp, err := client.Do(req)
+	if err != nil {
+		p.log.Error("management API call failed", zap.Error(err))
+		return ""
+	}
+
+	token, err := io.ReadAll(resp.Body)
+	if err != nil {
+		p.log.Error("failed to read management API response", zap.Error(err))
+		return ""
+	}
+	return string(token)
+}
+
 func claimsAreValidAndDifferent(a, b ProxyClaim) bool {
 	return a.IsValid && b.IsValid && !a.IssuedAt.Time.Equal(b.IssuedAt.Time)
+}
+
+// getRequestIPAddress gets the client IP address from CF-Connecting-IP or RemoteAddr in a request
+func getRequestIPAddress(req *http.Request) (string, error) {
+	if req == nil {
+		return "", errors.New("no request found")
+	}
+
+	// https://developers.cloudflare.com/fundamentals/reference/http-request-headers/#cf-connecting-ip
+	if cf := req.Header.Get("CF-Connecting-IP"); cf != "" {
+		return cf, nil
+	}
+
+	ip, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return "", fmt.Errorf("userip: %q is not IP:port, %w", req.RemoteAddr, err)
+	}
+
+	return ip, nil
 }
