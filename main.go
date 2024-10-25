@@ -135,7 +135,7 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	var claim ProxyClaim
 
 	if !queryClaim.IsValid && !cookieClaim.IsValid {
-		p.log.Info("no valid token found, calling management API")
+		p.log.Info("no valid token found, calling management API", zap.String("URL", p.ManagementAPI+p.TokenPath))
 		ipAddr, err := getRequestIPAddress(r)
 		if err != nil {
 			p.log.Error("failed to get request IP address", zap.Error(err))
@@ -299,7 +299,7 @@ func (p Proxy) getClaimFromToken(token string) ProxyClaim {
 	if errors.Is(err, jwt.ErrTokenExpired) {
 		p.log.Error("jwt token has expired: " + err.Error())
 	} else if err != nil {
-		p.log.Error("failed to parse token: " + err.Error())
+		p.log.Error("failed to parse token", zap.Error(err), zap.String("token", token))
 	} else {
 		claim.IsValid = true
 	}
