@@ -143,7 +143,17 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 			token = p.getTokenFromAPI(ipAddr)
 			claim = p.getClaimFromToken(token)
 
-			if !claim.IsValid {
+			if claim.IsValid {
+				p.setCookie(w, token, claim.ExpiresAt.Time)
+
+				upstream, err := p.getSite(claim.Level)
+				if err != nil {
+					return err
+				}
+
+				p.setVar(r, CaddyVarUpstream, upstream)
+				return nil
+			} else {
 				p.log.Info("last resort, redirecting to management API")
 				p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 				return nil
