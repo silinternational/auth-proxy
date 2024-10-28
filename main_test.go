@@ -16,7 +16,7 @@ import (
 
 func Test_AuthProxy(t *testing.T) {
 	const managementAPI = "http://management_api.example.com"
-	const tokenPath = "/auth/token"
+	const tokenPath = "/auth/token" // #nosec G101 this is not a hardcoded credential
 
 	cookieName := "_test"
 	tokenSecret := []byte("secret")
