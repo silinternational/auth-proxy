@@ -134,39 +134,15 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	var token string
 	var claim ProxyClaim
 
-	if !queryClaim.IsValid && !cookieClaim.IsValid {
-		p.log.Info("no valid token found, calling management API", zap.String("URL", p.ManagementAPI+p.TokenPath))
-		ipAddr, err := getRequestIPAddress(r)
-		if err != nil {
-			p.log.Error("failed to get request IP address", zap.Error(err))
-		} else {
-			token = p.getTokenFromAPI(ipAddr)
-			claim = p.getClaimFromToken(token)
-
-			if claim.IsValid {
-				p.setCookie(w, token, claim.ExpiresAt.Time)
-
-				upstream, err := p.getSite(claim.Level)
-				if err != nil {
-					return err
-				}
-
-				p.setVar(r, CaddyVarUpstream, upstream)
-				return nil
-			} else {
-				p.log.Info("last resort, redirecting to management API")
-				p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
-				return nil
-			}
-		}
-	}
-
 	if queryClaim.IsValid {
 		token = queryToken
 		claim = queryClaim
 	} else if cookieClaim.IsValid {
 		token = cookieToken
 		claim = cookieClaim
+	} else {
+		p.log.Info("no valid token found, calling management API", zap.String("URL", p.ManagementAPI+p.TokenPath))
+		return p.getNewToken(w, r)
 	}
 
 	// if a cookie hasn't been requested, try to set one
@@ -339,9 +315,36 @@ func (p Proxy) getFlag(r *http.Request) bool {
 	return r.URL.Query().Get(CookieFlag) != ""
 }
 
+// getNewToken uses either an API call or a redirect to get a new token from the management API
+func (p Proxy) getNewToken(w http.ResponseWriter, r *http.Request) error {
+	ipAddr, err := getRequestIPAddress(r)
+	if err != nil {
+		return fmt.Errorf("failed to get request IP address: %w", err)
+	}
+
+	token := p.getTokenFromAPI(ipAddr)
+	claim := p.getClaimFromToken(token)
+	if claim.IsValid {
+		p.setCookie(w, token, claim.ExpiresAt.Time)
+
+		upstream, err := p.getSite(claim.Level)
+		if err != nil {
+			return fmt.Errorf("failed to get upstream from claim: %w", err)
+		}
+
+		p.setVar(r, CaddyVarUpstream, upstream)
+		return nil
+	} else {
+		p.log.Info("last resort, redirecting to management API")
+		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+		return nil
+	}
+}
+
 func (p Proxy) getTokenFromAPI(ipAddress string) string {
 	client := &http.Client{Timeout: time.Second * 10}
-	req, err := http.NewRequest("GET", p.ManagementAPI+p.TokenPath, nil)
+	req, err := http.NewRequest("GET", "http://172.17.0.1:53050"+p.TokenPath, nil) // FIXME: DO NOT COMMIT THIS
+	// req, err := http.NewRequest("GET", p.ManagementAPI+p.TokenPath, nil)
 	if err != nil {
 		p.log.Error("error creating management API request", zap.Error(err))
 		return ""
