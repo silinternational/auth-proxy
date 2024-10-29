@@ -343,7 +343,7 @@ func (p Proxy) getNewToken(w http.ResponseWriter, r *http.Request) error {
 
 func (p Proxy) getTokenFromAPI(ipAddress string) string {
 	client := &http.Client{Timeout: time.Second * 10}
-	req, err := http.NewRequest("GET", p.ManagementAPI+p.TokenPath, nil)
+	req, err := http.NewRequest(http.MethodGet, p.ManagementAPI+p.TokenPath, nil)
 	if err != nil {
 		p.log.Error("error creating management API request", zap.Error(err))
 		return ""
@@ -356,6 +356,7 @@ func (p Proxy) getTokenFromAPI(ipAddress string) string {
 		return ""
 	}
 
+	defer resp.Body.Close()
 	token, err := io.ReadAll(resp.Body)
 	if err != nil {
 		p.log.Error("failed to read management API response", zap.Error(err))

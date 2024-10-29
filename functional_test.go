@@ -87,7 +87,7 @@ func sendRequest(url string, c *http.Cookie) error {
 func weSendARequestWithAuthorizationDataAuthorizingAccess(where, level string) error {
 	var c *http.Cookie
 	url := p.Host
-	expires := time.Now().Add(1000 + time.Second*time.Duration(rand.Intn(1000)))
+	expires := time.Now().Add(1000 + time.Second*time.Duration(rand.Intn(1000))) // #nosec G404 weak random number is OK
 	token := makeTestJWT(p.Secret, level, expires)
 
 	if where == "cookie" {
