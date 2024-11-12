@@ -1,6 +1,8 @@
 module github.com/silinternational/auth-proxy
 
-go 1.22
+go 1.22.0
+
+toolchain go1.23.2
 
 require (
 	github.com/caddyserver/caddy/v2 v2.8.4
