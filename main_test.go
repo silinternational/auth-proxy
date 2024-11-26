@@ -27,6 +27,7 @@ func Test_AuthProxy(t *testing.T) {
 		CookieName:    cookieName,
 		Secret:        tokenSecret,
 		Sites:         authURLs,
+		DefaultSite:   "default.example.com",
 		log:           zap.L(),
 		ManagementAPI: managementAPI,
 		TokenPath:     tokenPath,
@@ -59,10 +60,10 @@ func Test_AuthProxy(t *testing.T) {
 			wantRedirectURL: ptr(managementAPI + tokenPath + "?returnTo=%2F"),
 		},
 		{
-			name:    "invalid level",
-			url:     "/",
-			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "bad", validTime)),
-			wantErr: "not in sites",
+			name:         "default site",
+			url:          "/",
+			cookie:       makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "default", validTime)),
+			wantUpstream: ptr("default.example.com"),
 		},
 		{
 			name:            "query valid -- redirect to set cookie",
