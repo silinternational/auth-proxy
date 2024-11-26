@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -319,30 +318,6 @@ func (p Proxy) getNewToken(_ http.ResponseWriter, r *http.Request) error {
 	p.log.Info("redirecting to management API")
 	p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 	return nil
-}
-
-func (p Proxy) getTokenFromAPI(ipAddress string) string {
-	client := &http.Client{Timeout: time.Second * 10}
-	req, err := http.NewRequest(http.MethodGet, p.ManagementAPI+p.TokenPath, nil)
-	if err != nil {
-		p.log.Error("error creating management API request", zap.Error(err))
-		return ""
-	}
-
-	req.Header.Add("X-Auth-Proxy-Client-Ip", ipAddress)
-	resp, err := client.Do(req)
-	if err != nil {
-		p.log.Error("management API call failed", zap.Error(err))
-		return ""
-	}
-
-	defer resp.Body.Close()
-	token, err := io.ReadAll(resp.Body)
-	if err != nil {
-		p.log.Error("failed to read management API response", zap.Error(err))
-		return ""
-	}
-	return string(token)
 }
 
 func claimsAreValidAndDifferent(a, b ProxyClaim) bool {
