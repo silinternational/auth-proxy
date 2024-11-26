@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -202,7 +201,7 @@ func (p Proxy) setVar(r *http.Request, name, value string) {
 	p.log.Info("setting " + name + " to " + value)
 }
 
-func newDynamicProxy(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
+func newDynamicProxy(_ httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
 	return newProxy()
 }
 
@@ -315,30 +314,11 @@ func (p Proxy) getFlag(r *http.Request) bool {
 	return r.URL.Query().Get(CookieFlag) != ""
 }
 
-// getNewToken uses either an API call or a redirect to get a new token from the management API
-func (p Proxy) getNewToken(w http.ResponseWriter, r *http.Request) error {
-	ipAddr, err := getRequestIPAddress(r)
-	if err != nil {
-		return fmt.Errorf("failed to get request IP address: %w", err)
-	}
-
-	token := p.getTokenFromAPI(ipAddr)
-	claim := p.getClaimFromToken(token)
-	if claim.IsValid {
-		p.setCookie(w, token, claim.ExpiresAt.Time)
-
-		upstream, err := p.getSite(claim.Level)
-		if err != nil {
-			return fmt.Errorf("failed to get upstream from claim: %w", err)
-		}
-
-		p.setVar(r, CaddyVarUpstream, upstream)
-		return nil
-	} else {
-		p.log.Info("last resort, redirecting to management API")
-		p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
-		return nil
-	}
+// getNewToken uses a redirect to get a new token from the management API
+func (p Proxy) getNewToken(_ http.ResponseWriter, r *http.Request) error {
+	p.log.Info("redirecting to management API")
+	p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
+	return nil
 }
 
 func (p Proxy) getTokenFromAPI(ipAddress string) string {
@@ -367,23 +347,4 @@ func (p Proxy) getTokenFromAPI(ipAddress string) string {
 
 func claimsAreValidAndDifferent(a, b ProxyClaim) bool {
 	return a.IsValid && b.IsValid && !a.IssuedAt.Time.Equal(b.IssuedAt.Time)
-}
-
-// getRequestIPAddress gets the client IP address from CF-Connecting-IP or RemoteAddr in a request
-func getRequestIPAddress(req *http.Request) (string, error) {
-	if req == nil {
-		return "", errors.New("no request found")
-	}
-
-	// https://developers.cloudflare.com/fundamentals/reference/http-request-headers/#cf-connecting-ip
-	if cf := req.Header.Get("CF-Connecting-IP"); cf != "" {
-		return cf, nil
-	}
-
-	ip, _, err := net.SplitHostPort(req.RemoteAddr)
-	if err != nil {
-		return "", fmt.Errorf("userip: %q is not IP:port, %w", req.RemoteAddr, err)
-	}
-
-	return ip, nil
 }
