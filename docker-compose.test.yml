@@ -5,6 +5,7 @@ x-common-variables: &test-variables
   COOKIE_NAME: _proxy
   TOKEN_SECRET: Rm9yIEdvZCBzbyBsb3ZlZCB0aGUgd29ybGQgdGhhdCBoZSBnYXZlIGhpcyBvbmUgYW5kIG9ubHkgU29uLCB0aGF0IHdob2V2ZXIgYmVsaWV2ZXMgaW4gaGltIHNoYWxsIG5vdCBwZXJpc2ggYnV0IGhhdmUgZXRlcm5hbCBsaWZlLiAtIEpvaG4gMzoxNg==
   SITES: one:server1:80,two:server2:80,three:server3:80
+  DEFAULT_SITE: server1:80
   MANAGEMENT_API: http://fakemanagementapi:80
 
 services:

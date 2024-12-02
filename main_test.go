@@ -27,6 +27,7 @@ func Test_AuthProxy(t *testing.T) {
 		CookieName:    cookieName,
 		Secret:        tokenSecret,
 		Sites:         authURLs,
+		DefaultSite:   "default.example.com",
 		log:           zap.L(),
 		ManagementAPI: managementAPI,
 		TokenPath:     tokenPath,
@@ -59,10 +60,10 @@ func Test_AuthProxy(t *testing.T) {
 			wantRedirectURL: ptr(managementAPI + tokenPath + "?returnTo=%2F"),
 		},
 		{
-			name:    "invalid level",
-			url:     "/",
-			cookie:  makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "bad", validTime)),
-			wantErr: "not in sites",
+			name:         "default site",
+			url:          "/",
+			cookie:       makeTestJWTCookie(cookieName, makeTestJWT(tokenSecret, "default", validTime)),
+			wantUpstream: ptr("default.example.com"),
 		},
 		{
 			name:            "query valid -- redirect to set cookie",
@@ -232,4 +233,49 @@ func makeTestJWT(secret []byte, level string, expires time.Time) string {
 	tokenString, _ := token.SignedString(secret)
 
 	return tokenString
+}
+
+func TestProxy_isTrustedBot(t *testing.T) {
+	tests := []struct {
+		name      string
+		trusted   []string
+		userAgent string
+		want      bool
+	}{
+		{
+			name:      "empty user agent",
+			trusted:   []string{"googlebot"},
+			userAgent: "",
+			want:      false,
+		},
+		{
+			name:      "empty trusted list",
+			trusted:   nil,
+			userAgent: "Googlebot/2.1 (+http://www.googlebot.com/bot.html)",
+			want:      false,
+		},
+		{
+			name:      "not in trusted list",
+			trusted:   []string{"googlebot"},
+			userAgent: "duckduckgo",
+			want:      false,
+		},
+		{
+			name:      "in trusted list",
+			trusted:   []string{"duckduckgo", "googlebot"},
+			userAgent: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+			want:      true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			proxy := Proxy{
+				TrustedBots: tt.trusted,
+			}
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.Header.Set("User-Agent", tt.userAgent)
+			assert.Equalf(t, tt.want, proxy.isTrustedBot(r), "user agent '%s', trusted %+v",
+				r.Header.Get("User-Agent"), tt.trusted)
+		})
+	}
 }

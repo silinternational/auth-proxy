@@ -44,17 +44,19 @@ type ProxyClaim struct {
 }
 
 type Proxy struct {
+	DefaultSite   string    `required:"true" split_words:"true"`
 	Host          string    `required:"true"`
 	TokenSecret   string    `required:"true" split_words:"true"`
 	Sites         AuthSites `required:"true" split_words:"true"`
 	ManagementAPI string    `required:"true" split_words:"true"`
 
 	// optional params
-	CookieName       string `default:"_auth_proxy" split_words:"true"`
-	ReturnToParam    string `default:"returnTo" split_words:"true"`
-	RobotsTxtDisable bool   `default:"false" split_words:"true"`
-	TokenParam       string `default:"token" split_words:"true"`
-	TokenPath        string `default:"/auth/token" split_words:"true"`
+	CookieName       string   `split_words:"true" default:"_auth_proxy"`
+	ReturnToParam    string   `split_words:"true" default:"returnTo"`
+	RobotsTxtDisable bool     `split_words:"true" default:"false"`
+	TokenParam       string   `split_words:"true" default:"token"`
+	TokenPath        string   `split_words:"true" default:"/auth/token"`
+	TrustedBots      []string `split_words:"true" default:"googlebot"`
 
 	// Secret is the binary token secret. Must be exported to be valid after being passed back from Caddy.
 	Secret []byte `ignored:"true"`
@@ -124,6 +126,12 @@ func (p Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.
 }
 
 func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
+	if p.isTrustedBot(r) {
+		upstream := p.DefaultSite
+		p.setVar(r, CaddyVarUpstream, upstream)
+		return nil
+	}
+
 	queryToken := p.getTokenFromQueryString(r)
 	queryClaim := p.getClaimFromToken(queryToken)
 	cookieToken := p.getTokenFromCookie(r)
@@ -176,10 +184,7 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	upstream, err := p.getSite(claim.Level)
-	if err != nil {
-		return err
-	}
+	upstream := p.getSite(claim.Level)
 
 	p.setVar(r, CaddyVarUpstream, upstream)
 	return nil
@@ -215,6 +220,10 @@ func newProxy() (Proxy, error) {
 	if err != nil {
 		return p, fmt.Errorf("unable to decode Proxy TokenSecret: %w", err)
 	}
+
+	for i := range p.TrustedBots {
+		p.TrustedBots[i] = strings.ToLower(p.TrustedBots[i])
+	}
 	return p, nil
 }
 
@@ -230,16 +239,12 @@ func (p Proxy) getTokenFromCookie(r *http.Request) string {
 	return cookie.Value
 }
 
-func (p Proxy) getSite(level string) (string, error) {
+func (p Proxy) getSite(level string) string {
 	upstream, ok := p.Sites[level]
 	if !ok {
-		return "", &Error{
-			err:     fmt.Errorf("auth level '%v' not in sites: %v", level, p.Sites),
-			Message: "error: unrecognized access level",
-			Status:  http.StatusBadRequest,
-		}
+		return p.DefaultSite
 	}
-	return upstream, nil
+	return upstream
 }
 
 func (p Proxy) clearQueryToken(r *http.Request) {
@@ -318,6 +323,21 @@ func (p Proxy) getNewToken(_ http.ResponseWriter, r *http.Request) error {
 	p.log.Info("redirecting to management API")
 	p.setVar(r, CaddyVarRedirectURL, p.ManagementAPI+p.TokenPath+"?returnTo="+url.QueryEscape(p.Host+r.URL.Path))
 	return nil
+}
+
+// isTrustedBot compares the user agent in the request against a list of trusted bots in the configuration and
+// returns true if the user agent contains one of the configured keywords.
+func (p Proxy) isTrustedBot(r *http.Request) bool {
+	userAgent := strings.ToLower(r.Header.Get("User-Agent"))
+	if userAgent == "" {
+		return false
+	}
+	for _, s := range p.TrustedBots {
+		if strings.Contains(userAgent, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func claimsAreValidAndDifferent(a, b ProxyClaim) bool {
