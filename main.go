@@ -129,6 +129,7 @@ func (p Proxy) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if p.isTrustedBot(r) {
 		upstream := p.DefaultSite
 		p.setVar(r, CaddyVarUpstream, upstream)
+		p.log.Info("trusted bot", zap.String("user-agent", r.UserAgent()), zap.String("upstream", upstream))
 		return nil
 	}
 
@@ -202,7 +203,7 @@ func (p *Proxy) isTrusted(returnTo string) bool {
 
 func (p Proxy) setVar(r *http.Request, name, value string) {
 	caddyhttp.SetVar(r.Context(), name, value)
-	p.log.Info("setting " + name + " to " + value)
+	p.log.Debug("setting " + name + " to " + value)
 }
 
 func newDynamicProxy(_ httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error) {
@@ -328,7 +329,7 @@ func (p Proxy) getNewToken(_ http.ResponseWriter, r *http.Request) error {
 // isTrustedBot compares the user agent in the request against a list of trusted bots in the configuration and
 // returns true if the user agent contains one of the configured keywords.
 func (p Proxy) isTrustedBot(r *http.Request) bool {
-	userAgent := strings.ToLower(r.Header.Get("User-Agent"))
+	userAgent := strings.ToLower(r.UserAgent())
 	if userAgent == "" {
 		return false
 	}
