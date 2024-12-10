@@ -27,3 +27,8 @@ Feature: functional test cases
 			| url         | one         |
 			| url         | two         |
 			| url         | three       |
+
+	Scenario: Trusted bot
+		When we send a request with a user-agent that is trusted
+		Then we do not see an error message
+		And we will see the default version of the website
