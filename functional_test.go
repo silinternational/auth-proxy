@@ -52,6 +52,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^we send a request with (\w+) authorization data$`, weSendARequestWithAuthorizationData)
 	ctx.Step(`^we send a request with authorization data in the (\w+) authorizing (\w+) access$`,
 		weSendARequestWithAuthorizationDataAuthorizingAccess)
+	ctx.Step(`^we send a request with a user-agent that is trusted$`, weSendARequestWithAUserAgentThatIsTrusted)
 	ctx.Step(`^we will be redirected to the management api$`, weWillBeRedirectedToTheManagementApi)
 	ctx.Step(`^we do not see an error message$`, weDoNotSeeAnErrorMessage)
 	ctx.Step(`^we will see an error message$`, weWillSeeAnErrorMessage)
@@ -59,7 +60,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^we do not see the token parameter$`, weDoNotSeeTheTokenParameter)
 }
 
-func sendRequest(url string, c *http.Cookie) error {
+func sendRequest(url string, c *http.Cookie, headers map[string]string) error {
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -67,6 +68,10 @@ func sendRequest(url string, c *http.Cookie) error {
 
 	if c != nil {
 		request.AddCookie(c)
+	}
+
+	for k, v := range headers {
+		request.Header.Set(k, v)
 	}
 
 	response, err := client.Do(request)
@@ -95,7 +100,11 @@ func weSendARequestWithAuthorizationDataAuthorizingAccess(where, level string) e
 	} else {
 		url += fmt.Sprintf("?%s=%s", p.TokenParam, token)
 	}
-	return sendRequest(url, c)
+	return sendRequest(url, c, nil)
+}
+
+func weSendARequestWithAUserAgentThatIsTrusted() error {
+	return sendRequest(p.Host, nil, map[string]string{"User-Agent": "googlebot"})
 }
 
 func weSendARequestWithAuthorizationData(t string) error {
@@ -112,7 +121,7 @@ func weSendARequestWithAuthorizationData(t string) error {
 	default:
 		return godog.ErrPending
 	}
-	return sendRequest(p.Host, c)
+	return sendRequest(p.Host, c, nil)
 }
 
 func weWillBeRedirectedToTheManagementApi() error {
@@ -131,8 +140,8 @@ func weWillSeeAnErrorMessage() error {
 
 func weWillSeeTheAccessLevelVersionOfTheWebsite(level string) error {
 	proxy := last
-	if err := sendRequest("http://"+p.Sites[level], nil); err != nil {
-		return err
+	if err := sendRequest("http://"+p.getSite(level), nil, nil); err != nil {
+		return fmt.Errorf("sendRequest failed: %w", err)
 	}
 
 	return assertEqual(last.body, proxy.body)
